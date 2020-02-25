@@ -13,7 +13,8 @@ use amethyst::{
     },
     prelude::*,
     renderer::{
-        plugins::{RenderShaded3D, RenderToWindow},
+        palette::Srgb,
+        plugins::{RenderShaded3D, RenderSkybox, RenderToWindow},
         rendy::mesh::{Normal, Position, TexCoord},
         types::DefaultBackend,
         RenderingBundle,
@@ -143,7 +144,11 @@ fn main() -> Result<(), Error> {
                 )
                 .with_plugin(RenderShaded3D::default())
                 // Add our custom render plugin to the rendering bundle.
-                .with_plugin(RenderQuad::default()),
+                .with_plugin(RenderQuad::default())
+                .with_plugin(RenderSkybox::with_colors(
+                    Srgb::new(0.82, 0.51, 0.50),
+                    Srgb::new(0.18, 0.11, 0.85),
+                )),
         )?;
 
     let mut game = Application::build(assets_dir, ExampleState)?.build(game_data)?;
