@@ -1,6 +1,9 @@
 use amethyst::{
-    core::ecs::{
-        Component, DenseVecStorage, DispatcherBuilder, Join, ReadStorage, SystemData, World,
+    core::{
+        ecs::{
+            Component, DenseVecStorage, DispatcherBuilder, Join, ReadStorage, SystemData, World,
+        },
+        math::{Matrix4, Point2, Point3, Vector2, Vector3},
     },
     prelude::*,
     renderer::{
@@ -15,7 +18,7 @@ use amethyst::{
                 GraphContext, NodeBuffer, NodeImage,
             },
             hal::{self, device::Device, format::Format, pso, pso::ShaderStageFlags},
-            mesh::{AsVertex, VertexFormat},
+            mesh::{AsVertex, Mesh, Position, VertexFormat},
             shader::{Shader, SpirvShader},
         },
         submodules::{gather::CameraGatherer, DynamicUniform, DynamicVertexBuffer},
@@ -26,6 +29,7 @@ use amethyst::{
 
 use amethyst_error::Error;
 use derivative::Derivative;
+use genmesh::generators::{IndexedPolygon, SharedVertex};
 use glsl_layout::*;
 pub type Triangle = crate::custom_pass::Triangle;
 
@@ -123,6 +127,8 @@ pub struct DrawQuad<B: Backend> {
     env: DynamicUniform<B, ViewArgs>,
     vertex: DynamicVertexBuffer<B, QuadArgs>,
     vertex_count: usize,
+    instance: DynamicVertexBuffer<B, QuadInstanceArgs>,
+    instance_const: DynamicVertexBuffer<B, QuadInstanceArgsConst>,
     change: ChangeDetection,
 }
 
@@ -130,7 +136,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
     fn prepare(
         &mut self,
         factory: &Factory<B>,
-        _queue: QueueId,
+        queue: QueueId,
         index: usize,
         _subpass: hal::pass::Subpass<'_, B>,
         world: &World,
@@ -147,6 +153,10 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         self.env.write(factory, index, projview);
 
         println!("projview: {:?}", projview);
+
+        let quad_mesh = gen_quad_mesh(queue, &factory);
+
+        self.vertex.write(factory, index, quad_mesh.len(), Some(quad_mesh.get_vertex_iter()));
 
         //Update vertex count and see if it has changed
         let old_vertex_count = self.vertex_count;
@@ -228,6 +238,11 @@ fn build_custom_pipeline<B: Backend>(
             PipelineDescBuilder::new()
                 // This Pipeline uses our custom vertex description and does not use instancing
                 .with_vertex_desc(&[(QuadArgs::vertex(), pso::VertexInputRate::Vertex)])
+                .with_vertex_desc(&[(
+                    QuadInstanceArgsConst::vertex(),
+                    pso::VertexInputRate::Instance,
+                )])
+                .with_vertex_desc(&[(QuadInstanceArgs::vertex(), pso::VertexInputRate::Instance)])
                 .with_input_assembler(pso::InputAssemblerDesc::new(hal::Primitive::TriangleList))
                 // Add the shaders
                 .with_shaders(util::simple_shader_set(
@@ -294,12 +309,13 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
     }
 }
 
-/// Vertex Arguments to pass into shader.
-/// VertexData in shader:
-/// layout(location = 0) out VertexData {
-///    vec2 pos;
-///    vec4 color;
-/// } vertex;
+// /// Vertex Arguments to pass into shader.
+// /// VertexData in shader:
+// /// layout(location = 0) out VertexData {
+// ///    vec2 pos;
+// ///    vec4 color;
+// /// } vertex;
+
 // #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, AsStd140)]
 // #[repr(C, align(4))]
 // pub struct QuadArgs {
@@ -322,7 +338,58 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
 //     }
 // }
 
-type QuadArgs = crate::custom_pass::CustomArgs;
+// type QuadArgs = crate::custom_pass::CustomArgs;
+
+#[derive(Clone, Copy, Debug, AsStd140,PartialEq, PartialOrd)]
+#[repr(C, align(4))]
+pub struct QuadArgs {
+    position: vec3,
+}
+
+impl AsVertex for QuadArgs {
+    fn vertex() -> VertexFormat {
+        VertexFormat::new((
+            // position: vec3
+            (Format::Rgb32Sfloat, "position"),
+        ))
+    }
+}
+
+#[derive(Clone, Copy, Debug, AsStd140,PartialEq, PartialOrd)]
+#[repr(C, align(4))]
+pub struct QuadInstanceArgsConst {
+    pub translate: vec3,
+    pub dir: u32,
+}
+
+impl AsVertex for QuadInstanceArgsConst {
+    fn vertex() -> VertexFormat {
+        VertexFormat::new((
+            // translate: vec3
+            (Format::Rgb32Sfloat, "translate"),
+            // dir: u32
+            (Format::R32Uint, "dir"),
+        ))
+    }
+}
+
+#[derive(Clone, Copy, Debug, AsStd140,PartialEq, PartialOrd)]
+#[repr(C, align(4))]
+pub struct QuadInstanceArgs {
+    pub color: vec3,
+    pub pad: u32,
+}
+
+impl AsVertex for QuadInstanceArgs {
+    fn vertex() -> VertexFormat {
+        VertexFormat::new((
+            // color: vec3
+            (Format::Rgb32Sfloat, "color"),
+            // pad: u32
+            (Format::R32Uint, "pad"),
+        ))
+    }
+}
 
 // /// QuadUniformArgs
 // /// A Uniform we pass into the shader containing the current scale.
@@ -337,3 +404,47 @@ type QuadArgs = crate::custom_pass::CustomArgs;
 //     /// The value each vertex is scaled by.
 //     pub scale: float,
 // }
+
+struct QuadInstance {
+    translate: Vector3<f32>,
+    dir: u32,
+    color: Vector3<f32>,
+}
+
+impl QuadInstance {
+    fn get_args(&self) -> QuadInstanceArgs {
+        QuadInstanceArgs {
+            color: self.color.into(),
+            pad: 0,
+        }
+    }
+    fn get_args_const(&self) -> QuadInstanceArgsConst {
+        QuadInstanceArgsConst {
+            translate: self.translate.into(),
+            dir: self.dir,
+        }
+    }
+}
+
+fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B> ) -> Mesh<B> {
+    let icosphere = genmesh::generators::Plane::new();
+    let indices: Vec<_> =
+        genmesh::Vertices::vertices(icosphere.indexed_polygon_iter().triangulate())
+            .map(|i| i as u32)
+            .collect();
+
+    println!("indices: {}", indices.len());
+    let vertices: Vec<_> = icosphere
+        .shared_vertex_iter()
+        .map(|v| Position(v.pos.into()))
+        .collect();
+    println!("vertices: {}", vertices.len());
+    for v in &vertices {
+        println!("vert: {:?}", v);
+    }
+    Mesh::<Backend>::builder()
+        .with_indices(&indices[..])
+        .with_vertices(&vertices[..])
+        .build(queue, factory)
+        .unwrap()
+}
