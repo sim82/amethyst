@@ -99,6 +99,8 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
     ) -> Result<Box<dyn RenderGroup<B, World>>, failure::Error> {
         let env = DynamicUniform::new(factory, pso::ShaderStageFlags::VERTEX)?;
         let vertex = DynamicVertexBuffer::new();
+        let instance = DynamicVertexBuffer::new();
+        let instance_const = DynamicVertexBuffer::new();
 
         let (pipeline, pipeline_layout) = build_custom_pipeline(
             factory,
@@ -112,8 +114,12 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
             pipeline,
             pipeline_layout,
             env,
+            quad_mesh: None,
             vertex,
             vertex_count: 0,
+            instance,
+            instance_const,
+            instance_count: 0,
             change: Default::default(),
         }))
     }
@@ -125,10 +131,12 @@ pub struct DrawQuad<B: Backend> {
     pipeline: B::GraphicsPipeline,
     pipeline_layout: B::PipelineLayout,
     env: DynamicUniform<B, ViewArgs>,
+    quad_mesh: Option<Mesh<B>>,
     vertex: DynamicVertexBuffer<B, QuadArgs>,
     vertex_count: usize,
     instance: DynamicVertexBuffer<B, QuadInstanceArgs>,
     instance_const: DynamicVertexBuffer<B, QuadInstanceArgsConst>,
+    instance_count: usize,
     change: ChangeDetection,
 }
 
@@ -153,26 +161,27 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         self.env.write(factory, index, projview);
 
         println!("projview: {:?}", projview);
+        let mut changed = false;
+        if self.quad_mesh.is_none() {
+            self.quad_mesh = Some(gen_quad_mesh(queue, &factory));
+            changed = true;
+        }
 
-        let quad_mesh = gen_quad_mesh(queue, &factory);
+        // //Update vertex count and see if it has changed
+        // let old_vertex_count = self.vertex_count;
+        // self.vertex_count = triangles.join().count() * 3;
+        // let changed = old_vertex_count != self.vertex_count;
 
-        self.vertex.write(factory, index, quad_mesh.len(), Some(quad_mesh.get_vertex_iter()));
+        // // Create an iterator over the Triangle vertices
+        // let vertex_data_iter = triangles.join().flat_map(|triangle| triangle.get_args());
 
-        //Update vertex count and see if it has changed
-        let old_vertex_count = self.vertex_count;
-        self.vertex_count = triangles.join().count() * 3;
-        let changed = old_vertex_count != self.vertex_count;
-
-        // Create an iterator over the Triangle vertices
-        let vertex_data_iter = triangles.join().flat_map(|triangle| triangle.get_args());
-
-        // Write the vector to a Vertex buffer
-        self.vertex.write(
-            factory,
-            index,
-            self.vertex_count as u64,
-            Some(vertex_data_iter.collect::<Box<[QuadArgs]>>()),
-        );
+        // // Write the vector to a Vertex buffer
+        // self.vertex.write(
+        //     factory,
+        //     index,
+        //     self.vertex_count as u64,
+        //     Some(vertex_data_iter.collect::<Box<[QuadArgs]>>()),
+        // );
 
         // Return with we can reuse the draw buffers using the utility struct ChangeDetection
         self.change.prepare_result(index, changed)
@@ -195,7 +204,10 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
 
         // Bind the Dynamic buffer with the scale to the encoder
         self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
-
+        self.quad_mesh
+            .as_ref()
+            .unwrap()
+            .bind(0, &[QuadArgs::vertex()], &mut encoder);
         // Bind the vertex buffer to the encoder
         self.vertex.bind(index, 0, 0, &mut encoder);
 
@@ -240,9 +252,12 @@ fn build_custom_pipeline<B: Backend>(
                 .with_vertex_desc(&[(QuadArgs::vertex(), pso::VertexInputRate::Vertex)])
                 .with_vertex_desc(&[(
                     QuadInstanceArgsConst::vertex(),
-                    pso::VertexInputRate::Instance,
+                    pso::VertexInputRate::Instance(1),
                 )])
-                .with_vertex_desc(&[(QuadInstanceArgs::vertex(), pso::VertexInputRate::Instance)])
+                .with_vertex_desc(&[(
+                    QuadInstanceArgs::vertex(),
+                    pso::VertexInputRate::Instance(1),
+                )])
                 .with_input_assembler(pso::InputAssemblerDesc::new(hal::Primitive::TriangleList))
                 // Add the shaders
                 .with_shaders(util::simple_shader_set(
@@ -340,7 +355,7 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
 
 // type QuadArgs = crate::custom_pass::CustomArgs;
 
-#[derive(Clone, Copy, Debug, AsStd140,PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, AsStd140, PartialEq, PartialOrd)]
 #[repr(C, align(4))]
 pub struct QuadArgs {
     position: vec3,
@@ -355,7 +370,7 @@ impl AsVertex for QuadArgs {
     }
 }
 
-#[derive(Clone, Copy, Debug, AsStd140,PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, AsStd140, PartialEq, PartialOrd)]
 #[repr(C, align(4))]
 pub struct QuadInstanceArgsConst {
     pub translate: vec3,
@@ -373,7 +388,7 @@ impl AsVertex for QuadInstanceArgsConst {
     }
 }
 
-#[derive(Clone, Copy, Debug, AsStd140,PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, AsStd140, PartialEq, PartialOrd)]
 #[repr(C, align(4))]
 pub struct QuadInstanceArgs {
     pub color: vec3,
@@ -426,7 +441,7 @@ impl QuadInstance {
     }
 }
 
-fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B> ) -> Mesh<B> {
+fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
     let icosphere = genmesh::generators::Plane::new();
     let indices: Vec<_> =
         genmesh::Vertices::vertices(icosphere.indexed_polygon_iter().triangulate())
