@@ -3,13 +3,13 @@ use amethyst::{
         ecs::{
             Component, DenseVecStorage, DispatcherBuilder, Join, ReadStorage, SystemData, World,
         },
-        math::{Matrix4, Point2, Point3, Vector2, Vector3},
+        math::{convert, Matrix4, Point2, Point3, Vector2, Vector3},
     },
     prelude::*,
     renderer::{
         bundle::{RenderOrder, RenderPlan, RenderPlugin, Target},
         pipeline::{PipelineDescBuilder, PipelinesBuilder},
-        pod::ViewArgs,
+        pod::{IntoPod, ViewArgs},
         rendy::{
             command::{QueueId, RenderPassEncoder},
             factory::Factory,
@@ -29,7 +29,10 @@ use amethyst::{
 
 use amethyst_error::Error;
 use derivative::Derivative;
-use genmesh::generators::{IndexedPolygon, SharedVertex};
+use genmesh::{
+    generators::{IndexedPolygon, SharedVertex},
+    Triangulate,
+};
 use glsl_layout::*;
 pub type Triangle = crate::custom_pass::Triangle;
 
@@ -160,10 +163,42 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         let projview = CameraGatherer::gather(world).projview;
         self.env.write(factory, index, projview);
 
-        println!("projview: {:?}", projview);
+        // println!("projview: {:?}", projview);
         let mut changed = false;
         if self.quad_mesh.is_none() {
             self.quad_mesh = Some(gen_quad_mesh(queue, &factory));
+            self.vertex_count = 4;
+            changed = true;
+        }
+
+        if self.instance_count == 0 {
+            self.instance_count = 2;
+            let qi = [
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector3::new(1.0, 0.0, 0.0),
+                    dir: 0,
+                },
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector3::new(1.0, 0.0, 0.0),
+                    dir: 1,
+                },
+            ];
+            let instance_data_iter = qi.iter().map(|instance| instance.get_args());
+            let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
+            self.instance.write(
+                factory,
+                index,
+                self.instance_count as u64,
+                Some(instance_data_iter.collect::<Box<[QuadInstanceArgs]>>()),
+            );
+            self.instance_const.write(
+                factory,
+                index,
+                self.instance_count as u64,
+                Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
+            );
             changed = true;
         }
 
@@ -198,6 +233,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         if self.vertex_count == 0 {
             return;
         }
+        println!("draw");
 
         // Bind the pipeline to the the encoder
         encoder.bind_graphics_pipeline(&self.pipeline);
@@ -208,12 +244,14 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
             .as_ref()
             .unwrap()
             .bind(0, &[QuadArgs::vertex()], &mut encoder);
+        self.instance_const.bind(index, 1, 0, &mut encoder);
+        self.instance.bind(index, 3, 0, &mut encoder);
         // Bind the vertex buffer to the encoder
         self.vertex.bind(index, 0, 0, &mut encoder);
 
         // Draw the vertices
         unsafe {
-            encoder.draw(0..self.vertex_count as u32, 0..1);
+            encoder.draw(0..self.vertex_count as u32, 0..self.instance_count as u32);
         }
     }
 
@@ -420,6 +458,7 @@ impl AsVertex for QuadInstanceArgs {
 //     pub scale: float,
 // }
 
+#[derive(Clone)]
 struct QuadInstance {
     translate: Vector3<f32>,
     dir: u32,
@@ -429,13 +468,13 @@ struct QuadInstance {
 impl QuadInstance {
     fn get_args(&self) -> QuadInstanceArgs {
         QuadInstanceArgs {
-            color: self.color.into(),
+            color: self.color.into_pod(),
             pad: 0,
         }
     }
     fn get_args_const(&self) -> QuadInstanceArgsConst {
         QuadInstanceArgsConst {
-            translate: self.translate.into(),
+            translate: self.translate.into_pod(),
             dir: self.dir,
         }
     }
@@ -457,9 +496,9 @@ fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
     for v in &vertices {
         println!("vert: {:?}", v);
     }
-    Mesh::<Backend>::builder()
-        .with_indices(&indices[..])
-        .with_vertices(&vertices[..])
+    Mesh::<B>::builder()
+        .with_indices(indices)
+        .with_vertices(vertices)
         .build(queue, factory)
         .unwrap()
 }
