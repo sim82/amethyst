@@ -101,7 +101,6 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
         _images: Vec<NodeImage>,
     ) -> Result<Box<dyn RenderGroup<B, World>>, failure::Error> {
         let env = DynamicUniform::new(factory, pso::ShaderStageFlags::VERTEX)?;
-        let vertex = DynamicVertexBuffer::new();
         let instance = DynamicVertexBuffer::new();
         let instance_const = DynamicVertexBuffer::new();
 
@@ -118,8 +117,6 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
             pipeline_layout,
             env,
             quad_mesh: None,
-            vertex,
-            vertex_count: 0,
             instance,
             instance_const,
             instance_count: 0,
@@ -135,8 +132,6 @@ pub struct DrawQuad<B: Backend> {
     pipeline_layout: B::PipelineLayout,
     env: DynamicUniform<B, ViewArgs>,
     quad_mesh: Option<Mesh<B>>,
-    vertex: DynamicVertexBuffer<B, QuadArgs>,
-    vertex_count: usize,
     instance: DynamicVertexBuffer<B, QuadInstanceArgs>,
     instance_const: DynamicVertexBuffer<B, QuadInstanceArgsConst>,
     instance_count: usize,
@@ -162,63 +157,45 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
 
         let projview = CameraGatherer::gather(world).projview;
         self.env.write(factory, index, projview);
-
+        println!("prepare: {}", index);
         // println!("projview: {:?}", projview);
         let mut changed = false;
         if self.quad_mesh.is_none() {
             self.quad_mesh = Some(gen_quad_mesh(queue, &factory));
-            self.vertex_count = 4;
             changed = true;
         }
 
-        if self.instance_count == 0 {
-            self.instance_count = 2;
-            let qi = [
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector3::new(1.0, 0.0, 0.0),
-                    dir: 0,
-                },
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector3::new(1.0, 0.0, 0.0),
-                    dir: 1,
-                },
-            ];
-            let instance_data_iter = qi.iter().map(|instance| instance.get_args());
-            let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
-            self.instance.write(
-                factory,
-                index,
-                self.instance_count as u64,
-                Some(instance_data_iter.collect::<Box<[QuadInstanceArgs]>>()),
-            );
-            self.instance_const.write(
-                factory,
-                index,
-                self.instance_count as u64,
-                Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
-            );
-            changed = true;
-        }
-
-        // //Update vertex count and see if it has changed
-        // let old_vertex_count = self.vertex_count;
-        // self.vertex_count = triangles.join().count() * 3;
-        // let changed = old_vertex_count != self.vertex_count;
-
-        // // Create an iterator over the Triangle vertices
-        // let vertex_data_iter = triangles.join().flat_map(|triangle| triangle.get_args());
-
-        // // Write the vector to a Vertex buffer
-        // self.vertex.write(
-        //     factory,
-        //     index,
-        //     self.vertex_count as u64,
-        //     Some(vertex_data_iter.collect::<Box<[QuadArgs]>>()),
-        // );
-
-        // Return with we can reuse the draw buffers using the utility struct ChangeDetection
+        //if self.instance_count == 0 {
+        self.instance_count = 2;
+        let qi = [
+            QuadInstance {
+                translate: Vector3::new(0.0, 0.0, 0.0),
+                color: Vector3::new(1.0, 0.0, 0.0),
+                dir: 0,
+            },
+            QuadInstance {
+                translate: Vector3::new(1.0, 0.0, 0.0),
+                color: Vector3::new(0.0, 1.0, 0.0),
+                dir: 1,
+            },
+        ];
+        let instance_data_iter = qi.iter().map(|instance| instance.get_args());
+        let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
+        self.instance.write(
+            factory,
+            index,
+            self.instance_count as u64,
+            Some(instance_data_iter.collect::<Box<[QuadInstanceArgs]>>()),
+        );
+        self.instance_const.write(
+            factory,
+            index,
+            self.instance_count as u64,
+            Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
+        );
+        // println!("instance: {:?}", self.instance);
+        changed = true;
+        //}
         self.change.prepare_result(index, changed)
     }
 
@@ -230,28 +207,28 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         _world: &World,
     ) {
         // Don't worry about drawing if there are no vertices. Like before the state adds them to the screen.
-        if self.vertex_count == 0 {
+        if self.quad_mesh.is_none() {
             return;
         }
-        println!("draw");
+        // println!("draw");
 
         // Bind the pipeline to the the encoder
         encoder.bind_graphics_pipeline(&self.pipeline);
 
         // Bind the Dynamic buffer with the scale to the encoder
         self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
-        self.quad_mesh
-            .as_ref()
-            .unwrap()
-            .bind(0, &[QuadArgs::vertex()], &mut encoder);
+        println!("vertex format: {:?}", QuadArgs::vertex());
+
+        let quad_mesh = &self.quad_mesh.as_ref().unwrap();
+        quad_mesh.bind(0, &[QuadArgs::vertex()], &mut encoder);
+
         self.instance_const.bind(index, 1, 0, &mut encoder);
-        self.instance.bind(index, 3, 0, &mut encoder);
-        // Bind the vertex buffer to the encoder
-        self.vertex.bind(index, 0, 0, &mut encoder);
+        self.instance.bind(index, 2, 0, &mut encoder);
 
         // Draw the vertices
         unsafe {
-            encoder.draw(0..self.vertex_count as u32, 0..self.instance_count as u32);
+            // encoder.draw(0..self.vertex_count as u32, 0..self.instance_count as u32);
+            encoder.draw_indexed(0..quad_mesh.len() as u32, 0, 0..self.instance_count as u32);
         }
     }
 
@@ -287,15 +264,17 @@ fn build_custom_pipeline<B: Backend>(
         .with_pipeline(
             PipelineDescBuilder::new()
                 // This Pipeline uses our custom vertex description and does not use instancing
-                .with_vertex_desc(&[(QuadArgs::vertex(), pso::VertexInputRate::Vertex)])
-                .with_vertex_desc(&[(
-                    QuadInstanceArgsConst::vertex(),
-                    pso::VertexInputRate::Instance(1),
-                )])
-                .with_vertex_desc(&[(
-                    QuadInstanceArgs::vertex(),
-                    pso::VertexInputRate::Instance(1),
-                )])
+                .with_vertex_desc(&[
+                    (QuadArgs::vertex(), pso::VertexInputRate::Vertex),
+                    (
+                        QuadInstanceArgsConst::vertex(),
+                        pso::VertexInputRate::Instance(1),
+                    ),
+                    (
+                        QuadInstanceArgs::vertex(),
+                        pso::VertexInputRate::Instance(1),
+                    ),
+                ])
                 .with_input_assembler(pso::InputAssemblerDesc::new(hal::Primitive::TriangleList))
                 // Add the shaders
                 .with_shaders(util::simple_shader_set(
@@ -408,8 +387,8 @@ impl AsVertex for QuadArgs {
     }
 }
 
-#[derive(Clone, Copy, Debug, AsStd140, PartialEq, PartialOrd)]
-#[repr(C, align(4))]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[repr(C, align(16))]
 pub struct QuadInstanceArgsConst {
     pub translate: vec3,
     pub dir: u32,
@@ -418,16 +397,16 @@ pub struct QuadInstanceArgsConst {
 impl AsVertex for QuadInstanceArgsConst {
     fn vertex() -> VertexFormat {
         VertexFormat::new((
-            // translate: vec3
+            // color: vec3
             (Format::Rgb32Sfloat, "translate"),
-            // dir: u32
-            (Format::R32Uint, "dir"),
+            // pad: u32
+            (Format::R32Uint, "pad"),
         ))
     }
 }
 
-#[derive(Clone, Copy, Debug, AsStd140, PartialEq, PartialOrd)]
-#[repr(C, align(4))]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[repr(C, align(16))]
 pub struct QuadInstanceArgs {
     pub color: vec3,
     pub pad: u32,
@@ -493,12 +472,17 @@ fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
         .map(|v| Position(v.pos.into()))
         .collect();
     println!("vertices: {}", vertices.len());
-    for v in &vertices {
-        println!("vert: {:?}", v);
-    }
-    Mesh::<B>::builder()
+    // for v in &vertices {
+    //     println!("vert: {:?}", v);
+    // }
+    println!("indices: {:?}", indices);
+    println!("vertices: {:?}", vertices);
+    let mesh = Mesh::<B>::builder()
         .with_indices(indices)
         .with_vertices(vertices)
         .build(queue, factory)
-        .unwrap()
+        .unwrap();
+
+    println!("mesh: {:?}", mesh);
+    mesh
 }

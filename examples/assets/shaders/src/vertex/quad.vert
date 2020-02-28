@@ -32,11 +32,14 @@ void main() {
     mat4 modelx[6] = mat4[6](modelx0, modelx1, modelx2, modelx3, modelx4, modelx5);
    
     vertex.color = vec4(color, 1.0);
-    // frag_norm = normalize((vec4(normal, 1.0)).xyz);
     mat4 trans_mat = mat4(1.0);
     trans_mat[3] = vec4(translate, 1.0);
     mat4 model2 = trans_mat * modelx[dir];
     vertex.pos = vec4(position, 1.0);
     gl_Position = proj * view * model2 * vertex.pos;
+
+    // vertex.pos = vec4(position, 1.0);
+    // vertex.color = vec4(1.0, 0.0, 0.0, 1.0);
+    // gl_Position = proj_view * vertex.pos;
 
 }

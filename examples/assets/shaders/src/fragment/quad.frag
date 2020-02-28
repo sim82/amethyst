@@ -1,7 +1,7 @@
 #version 450
 
 layout(location = 0) in VertexData {
-    vec2 pos;
+    vec4 pos;
     vec4 color;
 } vertex;
 
