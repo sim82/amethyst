@@ -165,59 +165,59 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
             changed = true;
         }
 
-        //if self.instance_count == 0 {
-        let qi = [
-            QuadInstance {
-                translate: Vector3::new(0.0, 0.0, 0.0),
-                color: Vector4::new(1.0, 0.0, 0.0, 1.0),
-                dir: 0,
-            },
-            QuadInstance {
-                translate: Vector3::new(0.0, 0.0, 0.0),
-                color: Vector4::new(0.0, 1.0, 0.0, 1.0),
-                dir: 1,
-            },
-            QuadInstance {
-                translate: Vector3::new(0.0, 0.0, 0.0),
-                color: Vector4::new(0.0, 0.0, 1.0, 1.0),
-                dir: 2,
-            },
-            QuadInstance {
-                translate: Vector3::new(0.0, 0.0, 0.0),
-                color: Vector4::new(1.0, 1.0, 0.0, 1.0),
-                dir: 3,
-            },
-            QuadInstance {
-                translate: Vector3::new(0.0, 0.0, 0.0),
-                color: Vector4::new(0.0, 1.0, 1.0, 1.0),
-                dir: 4,
-            },
-            QuadInstance {
-                translate: Vector3::new(0.0, 0.0, 0.0),
-                color: Vector4::new(1.0, 0.0, 1.0, 1.0),
-                dir: 5,
-            },
-        ];
-        self.instance_count = qi.len();
+        if self.instance_count == 0 {
+            let qi = [
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector4::new(1.0, 0.0, 0.0, 1.0),
+                    dir: 0,
+                },
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector4::new(0.0, 1.0, 0.0, 1.0),
+                    dir: 1,
+                },
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector4::new(0.0, 0.0, 1.0, 1.0),
+                    dir: 2,
+                },
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector4::new(1.0, 1.0, 0.0, 1.0),
+                    dir: 3,
+                },
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector4::new(0.0, 1.0, 1.0, 1.0),
+                    dir: 4,
+                },
+                QuadInstance {
+                    translate: Vector3::new(0.0, 0.0, 0.0),
+                    color: Vector4::new(1.0, 0.0, 1.0, 1.0),
+                    dir: 5,
+                },
+            ];
+            self.instance_count = qi.len();
 
-        let instance_data_iter = qi.iter().map(|instance| instance.get_args());
-        self.instance.write(
-            factory,
-            index,
-            self.instance_count as u64,
-            Some(instance_data_iter.collect::<Box<[Color]>>()),
-        );
-        let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
+            let instance_data_iter = qi.iter().map(|instance| instance.get_args());
+            self.instance.write(
+                factory,
+                0,
+                self.instance_count as u64,
+                Some(instance_data_iter.collect::<Box<[Color]>>()),
+            );
+            let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
 
-        self.instance_const.write(
-            factory,
-            index,
-            self.instance_count as u64,
-            Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
-        );
-        // println!("instance: {:?}", self.instance);
-        changed = true;
-        //}
+            self.instance_const.write(
+                factory,
+                0,
+                self.instance_count as u64,
+                Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
+            );
+            // println!("instance: {:?}", self.instance);
+            changed = true;
+        }
         self.change.prepare_result(index, changed)
     }
 
@@ -246,9 +246,9 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
             .bind(0, &[Position::vertex()], &mut encoder)
             .unwrap();
 
-        let bind2 = self.instance.bind(index, 1, 0, &mut encoder);
+        let bind2 = self.instance.bind(0, 1, 0, &mut encoder);
 
-        let bind1 = self.instance_const.bind(index, 2, 0, &mut encoder);
+        let bind1 = self.instance_const.bind(0, 2, 0, &mut encoder);
 
         // println!("bind: {:?} {:?}", bind1, bind2);
         // Draw the vertices
@@ -318,9 +318,13 @@ fn build_custom_pipeline<B: Backend>(
                 .with_subpass(subpass)
                 .with_framebuffer_size(framebuffer_width, framebuffer_height)
                 // We are using alpha blending
+                .with_depth_test(pso::DepthTest {
+                    fun: pso::Comparison::Less,
+                    write: true,
+                })
                 .with_blend_targets(vec![pso::ColorBlendDesc {
                     mask: pso::ColorMask::ALL,
-                    blend: Some(pso::BlendState::ALPHA),
+                    blend: None,
                 }]),
         )
         .build(factory, None);
