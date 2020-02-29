@@ -132,7 +132,7 @@ pub struct DrawQuad<B: Backend> {
     pipeline_layout: B::PipelineLayout,
     env: DynamicUniform<B, ViewArgs>,
     quad_mesh: Option<Mesh<B>>,
-    instance: DynamicVertexBuffer<B, QuadInstanceArgs>,
+    instance: DynamicVertexBuffer<B, Color>,
     instance_const: DynamicVertexBuffer<B, QuadInstanceArgsConst>,
     instance_count: usize,
     change: ChangeDetection,
@@ -166,7 +166,6 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         }
 
         //if self.instance_count == 0 {
-        self.instance_count = 2;
         let qi = [
             QuadInstance {
                 translate: Vector3::new(0.0, 0.0, 0.0),
@@ -174,19 +173,42 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
                 dir: 0,
             },
             QuadInstance {
-                translate: Vector3::new(1.0, 0.0, 0.0),
+                translate: Vector3::new(0.0, 0.0, 0.0),
                 color: Vector4::new(0.0, 1.0, 0.0, 1.0),
                 dir: 1,
             },
+            QuadInstance {
+                translate: Vector3::new(0.0, 0.0, 0.0),
+                color: Vector4::new(0.0, 0.0, 1.0, 1.0),
+                dir: 2,
+            },
+            QuadInstance {
+                translate: Vector3::new(0.0, 0.0, 0.0),
+                color: Vector4::new(1.0, 1.0, 0.0, 1.0),
+                dir: 3,
+            },
+            QuadInstance {
+                translate: Vector3::new(0.0, 0.0, 0.0),
+                color: Vector4::new(0.0, 1.0, 1.0, 1.0),
+                dir: 4,
+            },
+            QuadInstance {
+                translate: Vector3::new(0.0, 0.0, 0.0),
+                color: Vector4::new(1.0, 0.0, 1.0, 1.0),
+                dir: 5,
+            },
         ];
+        self.instance_count = qi.len();
+
         let instance_data_iter = qi.iter().map(|instance| instance.get_args());
-        let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
         self.instance.write(
             factory,
             index,
             self.instance_count as u64,
-            Some(instance_data_iter.collect::<Box<[QuadInstanceArgs]>>()),
+            Some(instance_data_iter.collect::<Box<[Color]>>()),
         );
+        let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
+
         self.instance_const.write(
             factory,
             index,
@@ -210,21 +232,25 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         if self.quad_mesh.is_none() {
             return;
         }
-        // println!("draw");
+        println!("draw");
 
         // Bind the pipeline to the the encoder
         encoder.bind_graphics_pipeline(&self.pipeline);
 
         // Bind the Dynamic buffer with the scale to the encoder
         self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
-        println!("vertex format: {:?}", QuadArgs::vertex());
+        println!("vertex format: {:?}", Position::vertex());
 
         let quad_mesh = &self.quad_mesh.as_ref().unwrap();
-        quad_mesh.bind(0, &[QuadArgs::vertex()], &mut encoder);
+        quad_mesh
+            .bind(0, &[Position::vertex()], &mut encoder)
+            .unwrap();
 
-        self.instance_const.bind(index, 1, 0, &mut encoder);
-        self.instance.bind(index, 2, 0, &mut encoder);
+        let bind2 = self.instance.bind(index, 1, 0, &mut encoder);
 
+        let bind1 = self.instance_const.bind(index, 2, 0, &mut encoder);
+
+        // println!("bind: {:?} {:?}", bind1, bind2);
         // Draw the vertices
         unsafe {
             // encoder.draw(0..self.vertex_count as u32, 0..self.instance_count as u32);
@@ -258,20 +284,27 @@ fn build_custom_pipeline<B: Backend>(
     // Load the shaders
     let shader_vertex = unsafe { VERTEX.module(factory).unwrap() };
     let shader_fragment = unsafe { FRAGMENT.module(factory).unwrap() };
-
+    println!(
+        "desc: {:?}",
+        [
+            (Position::vertex(), pso::VertexInputRate::Vertex),
+            (
+                QuadInstanceArgsConst::vertex(),
+                pso::VertexInputRate::Instance(1),
+            ),
+            (Color::vertex(), pso::VertexInputRate::Instance(1)),
+        ]
+    );
     // Build the pipeline
     let pipes = PipelinesBuilder::new()
         .with_pipeline(
             PipelineDescBuilder::new()
                 // This Pipeline uses our custom vertex description and does not use instancing
                 .with_vertex_desc(&[
-                    (QuadArgs::vertex(), pso::VertexInputRate::Vertex),
+                    (Position::vertex(), pso::VertexInputRate::Vertex),
+                    (Color::vertex(), pso::VertexInputRate::Instance(1)),
                     (
                         QuadInstanceArgsConst::vertex(),
-                        pso::VertexInputRate::Instance(1),
-                    ),
-                    (
-                        QuadInstanceArgs::vertex(),
                         pso::VertexInputRate::Instance(1),
                     ),
                 ])
@@ -341,37 +374,6 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
     }
 }
 
-// /// Vertex Arguments to pass into shader.
-// /// VertexData in shader:
-// /// layout(location = 0) out VertexData {
-// ///    vec2 pos;
-// ///    vec4 color;
-// /// } vertex;
-
-// #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, AsStd140)]
-// #[repr(C, align(4))]
-// pub struct QuadArgs {
-//     /// vec2 pos;
-//     pub pos: vec2,
-//     /// vec4 color;
-//     pub color: vec4,
-// }
-
-// /// Required to send data into the shader.
-// /// These names must match the shader.
-// impl AsVertex for QuadArgs {
-//     fn vertex() -> VertexFormat {
-//         VertexFormat::new((
-//             // vec2 pos;
-//             (Format::Rg32Sfloat, "pos"),
-//             // vec4 color;
-//             (Format::Rgba32Sfloat, "color"),
-//         ))
-//     }
-// }
-
-// type QuadArgs = crate::custom_pass::CustomArgs;
-
 // custom attributes
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -408,26 +410,27 @@ impl AsAttribute for Translate {
     const FORMAT: Format = Format::Rgb32Sfloat;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[repr(C, align(4))]
-pub struct QuadArgs {
-    position: Position,
-}
+// #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+// #[repr(C, align(4))]
+// pub struct QuadArgs {
+//     position: Position,
+// }
 
-impl AsVertex for QuadArgs {
-    fn vertex() -> VertexFormat {
-        VertexFormat::new((
-            // position: vec3
-            Position::vertex(),
-        ))
-    }
-}
+// impl AsVertex for QuadArgs {
+//     fn vertex() -> VertexFormat {
+//         VertexFormat::new((
+//             // position: vec3
+//             Position::vertex(),
+//         ))
+//     }
+// }
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[repr(C, align(16))]
 pub struct QuadInstanceArgsConst {
     pub translate: Translate,
     pub dir: QuadDir,
+    // pub color: Color,
 }
 
 impl AsVertex for QuadInstanceArgsConst {
@@ -437,35 +440,10 @@ impl AsVertex for QuadInstanceArgsConst {
             Translate::vertex(),
             // pad: u32
             QuadDir::vertex(),
+            // Color::vertex(),
         ))
     }
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[repr(C, align(16))]
-pub struct QuadInstanceArgs {
-    pub color: Color,
-}
-
-impl AsVertex for QuadInstanceArgs {
-    fn vertex() -> VertexFormat {
-        Color::vertex()
-    }
-}
-
-// /// QuadUniformArgs
-// /// A Uniform we pass into the shader containing the current scale.
-// /// Uniform in shader:
-// /// layout(std140, set = 0, binding = 0) uniform QuadUniformArgs {
-// ///    uniform float scale;
-// /// };
-
-// #[derive(Clone, Copy, Debug, AsStd140)]
-// #[repr(C, align(4))]
-// pub struct QuadUniformArgs {
-//     /// The value each vertex is scaled by.
-//     pub scale: float,
-// }
 
 #[derive(Clone)]
 struct QuadInstance {
@@ -475,17 +453,20 @@ struct QuadInstance {
 }
 
 impl QuadInstance {
-    fn get_args(&self) -> QuadInstanceArgs {
+    fn get_args(&self) -> Color {
         let color: [f32; 4] = self.color.into();
-        QuadInstanceArgs {
-            color: color.into(),
-        }
+        // QuadInstanceArgs {
+        //     color: color.into(),
+        // }
+        color.into()
     }
     fn get_args_const(&self) -> QuadInstanceArgsConst {
         let translate: [f32; 3] = self.translate.into();
+        // let color: [f32; 4] = self.color.into();
         QuadInstanceArgsConst {
             translate: translate.into(),
             dir: self.dir.into(),
+            // color: color.into(),
         }
     }
 }

@@ -9,9 +9,10 @@ layout(std140, set = 0, binding = 0) uniform Projview {
 
 
 layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 translate;
-layout(location = 2) in uint dir;
-layout(location = 3) in vec4 color;
+layout(location = 1) in vec4 color;
+layout(location = 2) in vec3 translate;
+layout(location = 3) in uint dir;
+
 
 layout(location = 0) out VertexData {
     vec4 pos;
@@ -35,7 +36,7 @@ void main() {
     vertex.pos = vec4(position, 1.0);
     gl_Position = proj * view * model2 * vertex.pos;
 
-    // vertex.pos = vec4(position, 1.0);
+    // vertex.pos = vec4(0.0, 0.0, 0.0, 1.0);
     // vertex.color = vec4(1.0, 0.0, 0.0, 1.0);
     // gl_Position = proj_view * vertex.pos;
 
