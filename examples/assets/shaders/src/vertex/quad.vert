@@ -11,10 +11,7 @@ layout(std140, set = 0, binding = 0) uniform Projview {
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 translate;
 layout(location = 2) in uint dir;
-layout(location = 3) in vec3 color;
-layout(location = 4) in uint pad;
-
-
+layout(location = 3) in vec4 color;
 
 layout(location = 0) out VertexData {
     vec4 pos;
@@ -31,7 +28,7 @@ void main() {
     mat4 modelx5 = mat4(-0.125, -0.0, 0.0, 0.0, 0.0, 0.0, -0.125, 0.0, 0.0, -0.125, 0.0, 0.0, 0.0, -0.125, 0.0, 1.0);
     mat4 modelx[6] = mat4[6](modelx0, modelx1, modelx2, modelx3, modelx4, modelx5);
    
-    vertex.color = vec4(color, 1.0);
+    vertex.color = color;
     mat4 trans_mat = mat4(1.0);
     trans_mat[3] = vec4(translate, 1.0);
     mat4 model2 = trans_mat * modelx[dir];
