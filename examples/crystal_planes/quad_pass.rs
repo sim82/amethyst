@@ -18,7 +18,7 @@ use amethyst::{
                 GraphContext, NodeBuffer, NodeImage,
             },
             hal::{self, device::Device, format::Format, pso, pso::ShaderStageFlags},
-            mesh::{AsVertex, Mesh, Position, VertexFormat},
+            mesh::{AsAttribute, AsVertex, Color, Mesh, Position, VertexFormat},
             shader::{Shader, SpirvShader},
         },
         submodules::{gather::CameraGatherer, DynamicUniform, DynamicVertexBuffer},
@@ -372,17 +372,70 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
 
 // type QuadArgs = crate::custom_pass::CustomArgs;
 
+// custom attributes
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct QuadDir(pub u32);
+impl<T> From<T> for QuadDir
+where
+    T: Into<u32>,
+{
+    fn from(from: T) -> Self {
+        QuadDir(from.into())
+    }
+}
+impl AsAttribute for QuadDir {
+    const NAME: &'static str = "dir";
+    const FORMAT: Format = Format::R32Uint;
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct QuadPad(pub u32);
+impl<T> From<T> for QuadPad
+where
+    T: Into<u32>,
+{
+    fn from(from: T) -> Self {
+        QuadPad(from.into())
+    }
+}
+impl AsAttribute for QuadPad {
+    const NAME: &'static str = "pad";
+    const FORMAT: Format = Format::R32Uint;
+}
+
+/// Type for position attribute of vertex.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Translate(pub [f32; 3]);
+impl<T> From<T> for Translate
+where
+    T: Into<[f32; 3]>,
+{
+    fn from(from: T) -> Self {
+        Translate(from.into())
+    }
+}
+impl AsAttribute for Translate {
+    const NAME: &'static str = "translate";
+    const FORMAT: Format = Format::Rgb32Sfloat;
+}
+
 #[derive(Clone, Copy, Debug, AsStd140, PartialEq, PartialOrd)]
 #[repr(C, align(4))]
 pub struct QuadArgs {
-    position: vec3,
+    position: Position,
 }
 
 impl AsVertex for QuadArgs {
     fn vertex() -> VertexFormat {
         VertexFormat::new((
             // position: vec3
-            (Format::Rgb32Sfloat, "position"),
+            Position::vertex(),
         ))
     }
 }
@@ -390,17 +443,17 @@ impl AsVertex for QuadArgs {
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[repr(C, align(16))]
 pub struct QuadInstanceArgsConst {
-    pub translate: vec3,
-    pub dir: u32,
+    pub translate: Translate,
+    pub dir: QuadDir,
 }
 
 impl AsVertex for QuadInstanceArgsConst {
     fn vertex() -> VertexFormat {
         VertexFormat::new((
             // color: vec3
-            (Format::Rgb32Sfloat, "translate"),
+            Translate::vertex(),
             // pad: u32
-            (Format::R32Uint, "pad"),
+            QuadDir::vertex(),
         ))
     }
 }
@@ -408,15 +461,14 @@ impl AsVertex for QuadInstanceArgsConst {
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[repr(C, align(16))]
 pub struct QuadInstanceArgs {
-    pub color: vec3,
+    pub color: Color,
     pub pad: u32,
 }
 
 impl AsVertex for QuadInstanceArgs {
     fn vertex() -> VertexFormat {
         VertexFormat::new((
-            // color: vec3
-            (Format::Rgb32Sfloat, "color"),
+            Color::vertex(),
             // pad: u32
             (Format::R32Uint, "pad"),
         ))
