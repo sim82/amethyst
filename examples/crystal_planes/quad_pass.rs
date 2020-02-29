@@ -27,37 +27,17 @@ use amethyst::{
     },
 };
 
+use crate::{
+    quad::{gen_quad_mesh, QuadInstance},
+    vertex::*,
+};
+
 use amethyst_error::Error;
 use derivative::Derivative;
-use genmesh::{
-    generators::{IndexedPolygon, SharedVertex},
-    Triangulate,
-};
-use glsl_layout::*;
+
 pub type Triangle = crate::custom_pass::Triangle;
 
-// lazy_static::lazy_static! {
-//     // These uses the precompiled shaders.
-//     // These can be obtained using glslc.exe in the vulkan sdk.
-//     static ref VERTEX: SpirvShader = SpirvShader::from_bytes(
-//         include_bytes!("../assets/shaders/compiled/vertex/custom.vert.spv"),
-//         ShaderStageFlags::VERTEX,
-//         "main",
-//     ).unwrap();
-
-//     static ref FRAGMENT: SpirvShader = SpirvShader::from_bytes(
-//         include_bytes!("../assets/shaders/compiled/fragment/custom.frag.spv"),
-//         ShaderStageFlags::FRAGMENT,
-//         "main",
-//     ).unwrap();
-// }
-
 use amethyst::renderer::rendy::shader::{PathBufShaderInfo, ShaderKind, SourceLanguage};
-/// Example code of using a custom shader
-///
-/// Requires "shader-compiler" flag
-///
-/// ''' rust
 use std::path::PathBuf;
 lazy_static::lazy_static! {
     static ref VERTEX: SpirvShader = PathBufShaderInfo::new(
@@ -157,7 +137,6 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
 
         let projview = CameraGatherer::gather(world).projview;
         self.env.write(factory, index, projview);
-        println!("prepare: {}", index);
         // println!("projview: {:?}", projview);
         let mut changed = false;
         if self.quad_mesh.is_none() {
@@ -232,14 +211,12 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         if self.quad_mesh.is_none() {
             return;
         }
-        println!("draw");
 
         // Bind the pipeline to the the encoder
         encoder.bind_graphics_pipeline(&self.pipeline);
 
         // Bind the Dynamic buffer with the scale to the encoder
         self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
-        println!("vertex format: {:?}", Position::vertex());
 
         let quad_mesh = &self.quad_mesh.as_ref().unwrap();
         quad_mesh
@@ -250,10 +227,8 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
 
         let bind1 = self.instance_const.bind(0, 2, 0, &mut encoder);
 
-        // println!("bind: {:?} {:?}", bind1, bind2);
         // Draw the vertices
         unsafe {
-            // encoder.draw(0..self.vertex_count as u32, 0..self.instance_count as u32);
             encoder.draw_indexed(0..quad_mesh.len() as u32, 0, 0..self.instance_count as u32);
         }
     }
@@ -299,7 +274,6 @@ fn build_custom_pipeline<B: Backend>(
     let pipes = PipelinesBuilder::new()
         .with_pipeline(
             PipelineDescBuilder::new()
-                // This Pipeline uses our custom vertex description and does not use instancing
                 .with_vertex_desc(&[
                     (Position::vertex(), pso::VertexInputRate::Vertex),
                     (Color::vertex(), pso::VertexInputRate::Instance(1)),
@@ -376,129 +350,4 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
         });
         Ok(())
     }
-}
-
-// custom attributes
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct QuadDir(pub u32);
-impl<T> From<T> for QuadDir
-where
-    T: Into<u32>,
-{
-    fn from(from: T) -> Self {
-        QuadDir(from.into())
-    }
-}
-impl AsAttribute for QuadDir {
-    const NAME: &'static str = "dir";
-    const FORMAT: Format = Format::R32Uint;
-}
-
-/// Type for position attribute of vertex.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Translate(pub [f32; 3]);
-impl<T> From<T> for Translate
-where
-    T: Into<[f32; 3]>,
-{
-    fn from(from: T) -> Self {
-        Translate(from.into())
-    }
-}
-impl AsAttribute for Translate {
-    const NAME: &'static str = "translate";
-    const FORMAT: Format = Format::Rgb32Sfloat;
-}
-
-// #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-// #[repr(C, align(4))]
-// pub struct QuadArgs {
-//     position: Position,
-// }
-
-// impl AsVertex for QuadArgs {
-//     fn vertex() -> VertexFormat {
-//         VertexFormat::new((
-//             // position: vec3
-//             Position::vertex(),
-//         ))
-//     }
-// }
-
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[repr(C, align(16))]
-pub struct QuadInstanceArgsConst {
-    pub translate: Translate,
-    pub dir: QuadDir,
-    // pub color: Color,
-}
-
-impl AsVertex for QuadInstanceArgsConst {
-    fn vertex() -> VertexFormat {
-        VertexFormat::new((
-            // color: vec3
-            Translate::vertex(),
-            // pad: u32
-            QuadDir::vertex(),
-            // Color::vertex(),
-        ))
-    }
-}
-
-#[derive(Clone)]
-struct QuadInstance {
-    translate: Vector3<f32>,
-    dir: u32,
-    color: Vector4<f32>,
-}
-
-impl QuadInstance {
-    fn get_args(&self) -> Color {
-        let color: [f32; 4] = self.color.into();
-        // QuadInstanceArgs {
-        //     color: color.into(),
-        // }
-        color.into()
-    }
-    fn get_args_const(&self) -> QuadInstanceArgsConst {
-        let translate: [f32; 3] = self.translate.into();
-        // let color: [f32; 4] = self.color.into();
-        QuadInstanceArgsConst {
-            translate: translate.into(),
-            dir: self.dir.into(),
-            // color: color.into(),
-        }
-    }
-}
-
-fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
-    let icosphere = genmesh::generators::Plane::new();
-    let indices: Vec<_> =
-        genmesh::Vertices::vertices(icosphere.indexed_polygon_iter().triangulate())
-            .map(|i| i as u32)
-            .collect();
-
-    println!("indices: {}", indices.len());
-    let vertices: Vec<_> = icosphere
-        .shared_vertex_iter()
-        .map(|v| Position(v.pos.into()))
-        .collect();
-    println!("vertices: {}", vertices.len());
-    // for v in &vertices {
-    //     println!("vert: {:?}", v);
-    // }
-    println!("indices: {:?}", indices);
-    println!("vertices: {:?}", vertices);
-    let mesh = Mesh::<B>::builder()
-        .with_indices(indices)
-        .with_vertices(vertices)
-        .build(queue, factory)
-        .unwrap();
-
-    println!("mesh: {:?}", mesh);
-    mesh
 }

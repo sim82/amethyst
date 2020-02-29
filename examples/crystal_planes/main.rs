@@ -1,6 +1,9 @@
 //! Demonstrates how to use the fly camera
 mod custom_pass;
+mod quad;
 mod quad_pass;
+mod vertex;
+
 use crate::quad_pass::{RenderQuad, Triangle};
 
 use amethyst::{
