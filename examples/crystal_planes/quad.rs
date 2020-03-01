@@ -37,6 +37,7 @@ pub struct QuadInstance {
     pub translate: Vector3<f32>,
     pub dir: u32,
     pub color: Vector4<f32>,
+    pub index: u32, // temporary for plane sorting
 }
 
 impl QuadInstance {

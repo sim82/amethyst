@@ -145,38 +145,10 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         }
 
         if self.instance_count == 0 {
-            let qi = [
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector4::new(1.0, 0.0, 0.0, 1.0),
-                    dir: 0,
-                },
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector4::new(0.0, 1.0, 0.0, 1.0),
-                    dir: 1,
-                },
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector4::new(0.0, 0.0, 1.0, 1.0),
-                    dir: 2,
-                },
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector4::new(1.0, 1.0, 0.0, 1.0),
-                    dir: 3,
-                },
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector4::new(0.0, 1.0, 1.0, 1.0),
-                    dir: 4,
-                },
-                QuadInstance {
-                    translate: Vector3::new(0.0, 0.0, 0.0),
-                    color: Vector4::new(1.0, 0.0, 1.0, 1.0),
-                    dir: 5,
-                },
-            ];
+            let qi_storage = world.read_component::<QuadInstance>();
+            let mut qi = qi_storage.join().collect::<Vec<_>>();
+
+            qi.sort_unstable_by(|a, b| a.index.cmp(&b.index));
             self.instance_count = qi.len();
 
             let instance_data_iter = qi.iter().map(|instance| instance.get_args());

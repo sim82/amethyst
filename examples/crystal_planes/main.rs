@@ -1,15 +1,21 @@
 //! Demonstrates how to use the fly camera
+#[macro_use]
+extern crate itertools;
+
+mod crystal;
 mod custom_pass;
 mod quad;
 mod quad_pass;
 mod vertex;
 
 use crate::quad_pass::{RenderQuad, Triangle};
-
 use amethyst::{
     assets::{PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
     controls::{FlyControlBundle, HideCursor},
-    core::transform::TransformBundle,
+    core::{
+        math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
+        transform::TransformBundle,
+    },
     ecs::WorldExt,
     input::{
         is_key_down, is_mouse_button_down, InputBundle, InputEvent, ScrollDirection, StringBindings,
@@ -30,6 +36,50 @@ use amethyst::{
 type MyPrefabData = BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)>;
 
 struct ExampleState;
+
+struct MapLoadState;
+impl SimpleState for MapLoadState {
+    fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
+        let world = &mut data.world;
+
+        let bm = crystal::read_map("hidden_ramp.txt").expect("could not read file");
+        let mut planes = crystal::PlanesSep::new();
+        planes.create_planes(&bm);
+        world.insert(bm);
+
+        // let planes_copy: Vec<crystal::Plane> = planes.planes_iter().cloned().collect();
+        world.register::<crystal::Plane>();
+        world.register::<quad::QuadInstance>();
+
+        for (i, p) in planes.planes_iter().cloned().enumerate() {
+            let point = &p.cell;
+            let dir = match p.dir {
+                crystal::Dir::ZxPos => 4,
+                crystal::Dir::ZxNeg => 5,
+                crystal::Dir::YzPos => 2,
+                crystal::Dir::YzNeg => 3,
+                crystal::Dir::XyPos => 0,
+                crystal::Dir::XyNeg => 1,
+            };
+            let quad = quad::QuadInstance {
+                translate: Vector3::new(
+                    point[0] as f32 * 0.25,
+                    point[1] as f32 * 0.25,
+                    point[2] as f32 * 0.25,
+                ),
+                dir,
+                color: Vector4::new(1.0, 1.0, 1.0, 1.0),
+                index: i as u32,
+            };
+            world.create_entity().with(p).with(quad).build();
+        }
+
+        // let rad_scene = crystal::rads::Scene::new(world);
+        // world.insert(rad_scenm
+        println!("load done");
+        Trans::Replace(Box::new(ExampleState))
+    }
+}
 
 impl SimpleState for ExampleState {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
@@ -154,7 +204,7 @@ fn main() -> Result<(), Error> {
                 )),
         )?;
 
-    let mut game = Application::build(assets_dir, ExampleState)?.build(game_data)?;
+    let mut game = Application::build(assets_dir, MapLoadState)?.build(game_data)?;
     game.run();
     Ok(())
 }
