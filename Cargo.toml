@@ -146,6 +146,8 @@ itertools = "*"
 bincode = "*"
 ndarray = "^0.13"
 num-traits = "*"
+random_color = "^0.4"
+rand = "^0.7"
 
 [dev-dependencies]
 derive-new = "0.5.8"

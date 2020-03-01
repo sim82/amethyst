@@ -51,6 +51,7 @@ impl SimpleState for MapLoadState {
         world.register::<crystal::Plane>();
         world.register::<quad::QuadInstance>();
 
+        world.insert(Some(quad::ColorGeneration(0)));
         for (i, p) in planes.planes_iter().cloned().enumerate() {
             let point = &p.cell;
             let dir = match p.dir {
@@ -177,6 +178,7 @@ fn main() -> Result<(), Error> {
 
     let game_data = GameDataBuilder::default()
         .with_system_desc(PrefabLoaderSystemDesc::<MyPrefabData>::default(), "", &[])
+        .with_system_desc(quad::DiscoSystemDesc::default(), "disco_system", &[])
         .with_bundle(
             FlyControlBundle::<StringBindings>::new(
                 Some(String::from("move_x")),

@@ -2,7 +2,8 @@ use crate::vertex::QuadInstanceArgsConst;
 use amethyst::{
     core::{
         ecs::{
-            Component, DenseVecStorage, DispatcherBuilder, Join, ReadStorage, SystemData, World,
+            Component, DenseVecStorage, DispatcherBuilder, Join, ReadExpect, ReadStorage, System,
+            SystemData, World, Write, WriteStorage,
         },
         math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
     },
@@ -27,10 +28,8 @@ use amethyst::{
         util, ChangeDetection,
     },
 };
-use genmesh::{
-    generators::{IndexedPolygon, SharedVertex},
-    Triangulate,
-};
+use amethyst_derive::SystemDesc;
+use rand::Rng; //prelude::*;
 
 #[derive(Clone)]
 pub struct QuadInstance {
@@ -63,30 +62,35 @@ impl Component for QuadInstance {
     type Storage = DenseVecStorage<Self>;
 }
 
-pub fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
-    let icosphere = genmesh::generators::Plane::new();
-    let indices: Vec<_> =
-        genmesh::Vertices::vertices(icosphere.indexed_polygon_iter().triangulate())
-            .map(|i| i as u32)
-            .collect();
+pub struct ColorGeneration(pub usize);
 
-    println!("indices: {}", indices.len());
-    let vertices: Vec<_> = icosphere
-        .shared_vertex_iter()
-        .map(|v| Position(v.pos.into()))
-        .collect();
-    println!("vertices: {}", vertices.len());
-    // for v in &vertices {
-    //     println!("vert: {:?}", v);
-    // }
-    println!("indices: {:?}", indices);
-    println!("vertices: {:?}", vertices);
-    let mesh = Mesh::<B>::builder()
-        .with_indices(indices)
-        .with_vertices(vertices)
-        .build(queue, factory)
-        .unwrap();
+#[derive(SystemDesc)]
+#[system_desc(name(DiscoSystemDesc))]
+pub struct DiscoSystem;
+impl<'a> System<'a> for DiscoSystem {
+    type SystemData = (
+        WriteStorage<'a, QuadInstance>,
+        Write<'a, Option<ColorGeneration>>,
+    );
 
-    println!("mesh: {:?}", mesh);
-    mesh
+    fn run(&mut self, (mut quad_instances, mut color_generation): Self::SystemData) {
+        let mut rand = rand::thread_rng();
+        use random_color::{Luminosity, RandomColor};
+        let mut rc = RandomColor::new();
+        rc.luminosity(Luminosity::Bright);
+
+        for q in (&mut quad_instances).join() {
+            let color = if rand.gen_bool(0.1) {
+                rc.to_rgb_array()
+            } else {
+                [0; 3]
+            };
+            q.color[0] = color[0] as f32 / 255.0;
+            q.color[1] = color[1] as f32 / 255.0;
+            q.color[2] = color[2] as f32 / 255.0;
+        }
+        if let Some(ref mut color_generation) = *color_generation {
+            color_generation.0 += 1;
+        }
+    }
 }

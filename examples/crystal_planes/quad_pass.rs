@@ -1,7 +1,8 @@
 use amethyst::{
     core::{
         ecs::{
-            Component, DenseVecStorage, DispatcherBuilder, Join, ReadStorage, SystemData, World,
+            Component, DenseVecStorage, DispatcherBuilder, Join, Read, ReadExpect, ReadStorage,
+            SystemData, World, WriteExpect,
         },
         math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
     },
@@ -26,11 +27,12 @@ use amethyst::{
         util, ChangeDetection,
     },
 };
-
-use crate::{
-    quad::{gen_quad_mesh, QuadInstance},
-    vertex::*,
+use genmesh::{
+    generators::{IndexedPolygon, SharedVertex},
+    Triangulate,
 };
+
+use crate::{quad::QuadInstance, vertex::*};
 
 use amethyst_error::Error;
 use derivative::Derivative;
@@ -67,13 +69,20 @@ impl DrawQuadDesc {
     }
 }
 
+#[derive(Debug)]
+struct InstanceBuffers<B: Backend> {
+    instance: DynamicVertexBuffer<B, Color>,
+    instance_const: DynamicVertexBuffer<B, QuadInstanceArgsConst>,
+    instance_count: usize,
+}
+
 impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
     fn build(
         self,
         _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
         _queue: QueueId,
-        _world: &World,
+        world: &World,
         framebuffer_width: u32,
         framebuffer_height: u32,
         subpass: hal::pass::Subpass<'_, B>,
@@ -92,15 +101,20 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
             vec![env.raw_layout()],
         )?;
 
+        let instance_buffers = InstanceBuffers::<B> {
+            instance,
+            instance_const,
+            instance_count: 0,
+        };
+
         Ok(Box::new(DrawQuad::<B> {
             pipeline,
             pipeline_layout,
             env,
             quad_mesh: None,
-            instance,
-            instance_const,
-            instance_count: 0,
             change: Default::default(),
+            instance_buffers,
+            color_generation: Vec::new(),
         }))
     }
 }
@@ -112,10 +126,9 @@ pub struct DrawQuad<B: Backend> {
     pipeline_layout: B::PipelineLayout,
     env: DynamicUniform<B, ViewArgs>,
     quad_mesh: Option<Mesh<B>>,
-    instance: DynamicVertexBuffer<B, Color>,
-    instance_const: DynamicVertexBuffer<B, QuadInstanceArgsConst>,
-    instance_count: usize,
     change: ChangeDetection,
+    instance_buffers: InstanceBuffers<B>,
+    color_generation: Vec<usize>,
 }
 
 impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
@@ -127,14 +140,6 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         _subpass: hal::pass::Subpass<'_, B>,
         world: &World,
     ) -> PrepareResult {
-        let (triangles,) = <(ReadStorage<'_, Triangle>,)>::fetch(world);
-
-        // Get our scale value
-        // let scale = world.read_resource::<QuadUniformArgs>();
-
-        // Write to our DynamicUniform
-        // self.env.write(factory, index, scale.std140());
-
         let projview = CameraGatherer::gather(world).projview;
         self.env.write(factory, index, projview);
         // println!("projview: {:?}", projview);
@@ -144,31 +149,56 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
             changed = true;
         }
 
-        if self.instance_count == 0 {
-            let qi_storage = world.read_component::<QuadInstance>();
-            let mut qi = qi_storage.join().collect::<Vec<_>>();
+        let instance_buffers = &mut self.instance_buffers;
+        let color_generation = <Read<Option<crate::quad::ColorGeneration>>>::fetch(world);
+
+        if instance_buffers.instance_count == 0 {
+            let quad_instances = <ReadStorage<'_, QuadInstance>>::fetch(world);
+            let mut qi = quad_instances.join().collect::<Vec<_>>();
 
             qi.sort_unstable_by(|a, b| a.index.cmp(&b.index));
-            self.instance_count = qi.len();
+            instance_buffers.instance_count = qi.len();
 
-            let instance_data_iter = qi.iter().map(|instance| instance.get_args());
-            self.instance.write(
-                factory,
-                0,
-                self.instance_count as u64,
-                Some(instance_data_iter.collect::<Box<[Color]>>()),
-            );
             let instance_data_const_iter = qi.iter().map(|instance| instance.get_args_const());
 
-            self.instance_const.write(
+            instance_buffers.instance_const.write(
+                factory,
+                index,
+                instance_buffers.instance_count as u64,
+                Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
+            );
+            let instance_data_iter = qi.iter().map(|instance| instance.get_args());
+            instance_buffers.instance.write(
                 factory,
                 0,
-                self.instance_count as u64,
-                Some(instance_data_const_iter.collect::<Box<[QuadInstanceArgsConst]>>()),
+                instance_buffers.instance_count as u64,
+                Some(instance_data_iter.collect::<Box<[Color]>>()),
             );
             // println!("instance: {:?}", self.instance);
             changed = true;
+        } else if let Some(ref color_generation) = *color_generation {
+            if self.color_generation.len() <= index {
+                self.color_generation.resize(index + 1, 0);
+            }
+            if color_generation.0 != self.color_generation[index] {
+                println!("write color: {}", index);
+                let quad_instances = <ReadStorage<'_, QuadInstance>>::fetch(world);
+                let mut qi = quad_instances.join().collect::<Vec<_>>();
+
+                qi.sort_unstable_by(|a, b| a.index.cmp(&b.index));
+                let instance_data_iter = qi.iter().map(|instance| instance.get_args());
+                instance_buffers.instance.write(
+                    factory,
+                    0,
+                    instance_buffers.instance_count as u64,
+                    Some(instance_data_iter.collect::<Box<[Color]>>()),
+                );
+                // println!("instance: {:?}", self.instance);
+                changed = true;
+                self.color_generation[index] = color_generation.0;
+            }
         }
+
         self.change.prepare_result(index, changed)
     }
 
@@ -195,13 +225,17 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
             .bind(0, &[Position::vertex()], &mut encoder)
             .unwrap();
 
-        let bind2 = self.instance.bind(0, 1, 0, &mut encoder);
-
-        let bind1 = self.instance_const.bind(0, 2, 0, &mut encoder);
+        let instance_buffers = &mut self.instance_buffers;
+        instance_buffers.instance.bind(index, 1, 0, &mut encoder);
+        instance_buffers.instance_const.bind(0, 2, 0, &mut encoder);
 
         // Draw the vertices
         unsafe {
-            encoder.draw_indexed(0..quad_mesh.len() as u32, 0, 0..self.instance_count as u32);
+            encoder.draw_indexed(
+                0..quad_mesh.len() as u32,
+                0,
+                0..instance_buffers.instance_count as u32,
+            );
         }
     }
 
@@ -322,4 +356,32 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
         });
         Ok(())
     }
+}
+
+pub fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
+    let icosphere = genmesh::generators::Plane::new();
+    let indices: Vec<_> =
+        genmesh::Vertices::vertices(icosphere.indexed_polygon_iter().triangulate())
+            .map(|i| i as u32)
+            .collect();
+
+    println!("indices: {}", indices.len());
+    let vertices: Vec<_> = icosphere
+        .shared_vertex_iter()
+        .map(|v| Position(v.pos.into()))
+        .collect();
+    println!("vertices: {}", vertices.len());
+    // for v in &vertices {
+    //     println!("vert: {:?}", v);
+    // }
+    println!("indices: {:?}", indices);
+    println!("vertices: {:?}", vertices);
+    let mesh = Mesh::<B>::builder()
+        .with_indices(indices)
+        .with_vertices(vertices)
+        .build(queue, factory)
+        .unwrap();
+
+    println!("mesh: {:?}", mesh);
+    mesh
 }
