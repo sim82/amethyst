@@ -1,7 +1,10 @@
 use super::{ffs, util, PlanesSep};
 #[allow(unused_imports)]
 use super::{Bitmap, BlockMap, DisplayWrap, Point3, Point3i, Vec3, Vec3i};
-use amethyst::core::math;
+use amethyst::core::{
+    ecs::{ReadExpect, SystemData, World},
+    math,
+};
 use rayon::prelude::*;
 use simdeez::{avx2::Avx2, sse2::Sse2, Simd};
 use std::time::Instant;
@@ -166,8 +169,6 @@ impl Blocklist {
 }
 
 pub struct Scene {
-    pub planes: PlanesSep,
-    pub bitmap: BlockMap,
     pub emit: Vec<Vec3>,
     pub blocks: Vec<Blocklist>,
     pub extents: Vec<Vec<ffs::Extent>>,
@@ -182,13 +183,15 @@ fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
 }
 
 impl Scene {
-    pub fn new(planes: PlanesSep, bitmap: BlockMap) -> Self {
+    pub fn new(world: &World) -> Self {
+        let (planes, bitmap) = <(ReadExpect<PlanesSep>, ReadExpect<BlockMap>)>::fetch(world);
+
         let filename = "extents.bin";
 
         let extents = if let Some(extents) = ffs::load_extents(filename) {
             extents
         } else {
-            let formfactors = ffs::split_formfactors(ffs::setup_formfactors(&planes, &bitmap));
+            let formfactors = ffs::split_formfactors(ffs::setup_formfactors(&*planes, &*bitmap));
             let extents = ffs::to_extents(&formfactors);
             ffs::write_extents(filename, &extents);
             println!("wrote {}", filename);
@@ -228,8 +231,6 @@ impl Scene {
             extents: extents,
             //ff: formfactors,
             diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
-            planes: planes,
-            bitmap: bitmap,
             pints: 0,
         }
     }
@@ -240,9 +241,11 @@ impl Scene {
         }
     }
 
-    pub fn apply_light(&mut self, pos: Point3, color: Vec3) {
+    pub fn apply_light(&mut self, world: &World, pos: Point3, color: Vec3) {
+        let (planes, bitmap) = <(ReadExpect<PlanesSep>, ReadExpect<BlockMap>)>::fetch(world);
+
         let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32);
-        for (i, plane) in self.planes.planes_iter().enumerate() {
+        for (i, plane) in planes.planes_iter().enumerate() {
             let trace_pos = plane.cell + plane.dir.get_normal();
 
             let d = (pos - Point3::new(trace_pos.x as f32, trace_pos.y as f32, trace_pos.z as f32))
@@ -255,7 +258,7 @@ impl Scene {
 
             //self.emit[i] = Vec3::zero(); //new(0.2, 0.2, 0.2);
             let diff_color = self.diffuse[i];
-            if !util::occluded(light_pos, trace_pos, &self.bitmap) && dot > 0f32 {
+            if !util::occluded(light_pos, trace_pos, &*bitmap) && dot > 0f32 {
                 // println!("light");
                 self.emit[i] +=
                     vec_mul(&diff_color, &color) * dot * (5f32 / (2f32 * 3.1415f32 * len * len));

@@ -6,6 +6,7 @@ mod crystal;
 mod custom_pass;
 mod quad;
 mod quad_pass;
+mod systems;
 mod vertex;
 
 use crate::quad_pass::{RenderQuad, Triangle};
@@ -46,7 +47,6 @@ impl SimpleState for MapLoadState {
         let mut planes = crystal::PlanesSep::new();
         planes.create_planes(&bm);
         world.insert(bm);
-
         // let planes_copy: Vec<crystal::Plane> = planes.planes_iter().cloned().collect();
         world.register::<crystal::Plane>();
         world.register::<quad::QuadInstance>();
@@ -74,9 +74,9 @@ impl SimpleState for MapLoadState {
             };
             world.create_entity().with(p).with(quad).build();
         }
-
-        // let rad_scene = crystal::rads::Scene::new(world);
-        // world.insert(rad_scenm
+        world.insert(planes);
+        let rad_scene = crystal::rads::Scene::new(world);
+        world.insert(rad_scene);
         println!("load done");
         Trans::Replace(Box::new(ExampleState))
     }
@@ -178,7 +178,22 @@ fn main() -> Result<(), Error> {
 
     let game_data = GameDataBuilder::default()
         .with_system_desc(PrefabLoaderSystemDesc::<MyPrefabData>::default(), "", &[])
-        .with_system_desc(quad::DiscoSystemDesc::default(), "disco_system", &[])
+        // .with_system_desc(quad::DiscoSystemDesc::default(), "disco_system", &[])
+        .with_system_desc(
+            systems::ApplyEmitSystemDesc::default(),
+            "apply_emit_system",
+            &[],
+        )
+        .with_system_desc(
+            systems::RunRadSceneSystemDesc::default(),
+            "run_rad_system",
+            &["apply_emit_system"],
+        )
+        .with_system_desc(
+            systems::CopyRadFrontSystemDesc::default(),
+            "copy_rad_front_system",
+            &["run_rad_system"],
+        )
         .with_bundle(
             FlyControlBundle::<StringBindings>::new(
                 Some(String::from("move_x")),

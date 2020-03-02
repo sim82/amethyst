@@ -31,6 +31,8 @@ use amethyst::{
 use amethyst_derive::SystemDesc;
 use rand::Rng; //prelude::*;
 
+use std::time::{Duration, Instant};
+
 #[derive(Clone)]
 pub struct QuadInstance {
     pub translate: Vector3<f32>,
