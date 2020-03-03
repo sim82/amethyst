@@ -17,7 +17,7 @@ use amethyst::{
         math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
         transform::TransformBundle,
     },
-    ecs::WorldExt,
+    ecs::{prelude::*, WorldExt, WriteExpect},
     input::{
         is_key_down, is_mouse_button_down, InputBundle, InputEvent, ScrollDirection, StringBindings,
     },
@@ -36,6 +36,18 @@ use amethyst::{
 
 type MyPrefabData = BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)>;
 
+#[derive(PartialEq, Debug)]
+enum LightMode {
+    RandomFlashing,
+    Tron,
+}
+
+impl Default for LightMode {
+    fn default() -> Self {
+        LightMode::RandomFlashing
+    }
+}
+
 struct ExampleState;
 
 struct MapLoadState;
@@ -52,6 +64,8 @@ impl SimpleState for MapLoadState {
         world.register::<quad::QuadInstance>();
 
         world.insert(Some(quad::ColorGeneration(0)));
+        world.insert(LightMode::RandomFlashing);
+
         for (i, p) in planes.planes_iter().cloned().enumerate() {
             let point = &p.cell;
             let dir = match p.dir {
@@ -137,6 +151,8 @@ impl SimpleState for ExampleState {
         event: StateEvent,
     ) -> SimpleTrans {
         let StateData { world, .. } = data;
+        let mut light_mode = WriteExpect::<LightMode>::fetch(world);
+
         if let StateEvent::Window(event) = &event {
             if is_key_down(&event, VirtualKeyCode::Escape) {
                 let mut hide_cursor = world.write_resource::<HideCursor>();
@@ -144,8 +160,14 @@ impl SimpleState for ExampleState {
             } else if is_mouse_button_down(&event, MouseButton::Left) {
                 let mut hide_cursor = world.write_resource::<HideCursor>();
                 hide_cursor.hide = true;
+            } else if is_key_down(&event, VirtualKeyCode::Key1) {
+                *light_mode = LightMode::RandomFlashing;
+            } else if is_key_down(&event, VirtualKeyCode::Key2) {
+                *light_mode = LightMode::Tron;
             }
         }
+
+        // println!("LightMode: {:?}", *light_mode);
         Trans::None
         // match &event {
         //     // Using the Mouse Wheel to control the scale
@@ -179,15 +201,21 @@ fn main() -> Result<(), Error> {
     let game_data = GameDataBuilder::default()
         .with_system_desc(PrefabLoaderSystemDesc::<MyPrefabData>::default(), "", &[])
         // .with_system_desc(quad::DiscoSystemDesc::default(), "disco_system", &[])
-        .with_system_desc(
-            systems::ApplyEmitSystemDesc::default(),
-            "apply_emit_system",
+        .with(
+            // FIXME: create pausable system from SystemDesc?
+            systems::RandomFlashingEmitSystem {}.pausable(LightMode::RandomFlashing),
+            "random_flashing_emit_system",
+            &[],
+        )
+        .with(
+            systems::TronEmitSystem {}.pausable(LightMode::Tron),
+            "tron_emit_system",
             &[],
         )
         .with_system_desc(
             systems::RunRadSceneSystemDesc::default(),
             "run_rad_system",
-            &["apply_emit_system"],
+            &["random_flashing_emit_system", "tron_emit_system"],
         )
         .with_system_desc(
             systems::CopyRadFrontSystemDesc::default(),
@@ -200,7 +228,8 @@ fn main() -> Result<(), Error> {
                 Some(String::from("move_y")),
                 Some(String::from("move_z")),
             )
-            .with_sensitivity(0.1, 0.1),
+            .with_sensitivity(0.1, 0.1)
+            .with_speed(10.0),
         )?
         .with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
         .with_bundle(

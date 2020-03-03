@@ -32,9 +32,9 @@ use amethyst_derive::SystemDesc;
 use rand::Rng; //prelude::*;
 
 #[derive(SystemDesc)]
-#[system_desc(name(ApplyEmitSystemDesc))]
-pub struct ApplyEmitSystem;
-impl<'a> System<'a> for ApplyEmitSystem {
+#[system_desc(name(RandomFlashingEmitSystemDesc))]
+pub struct RandomFlashingEmitSystem;
+impl<'a> System<'a> for RandomFlashingEmitSystem {
     type SystemData = WriteExpect<'a, Scene>;
 
     fn run(&mut self, mut rad_scene: Self::SystemData) {
@@ -48,6 +48,30 @@ impl<'a> System<'a> for ApplyEmitSystem {
             } else {
                 [0; 3]
             };
+            emit[0] = color[0] as f32 / 255.0;
+            emit[1] = color[1] as f32 / 255.0;
+            emit[2] = color[2] as f32 / 255.0;
+        }
+    }
+}
+
+#[derive(SystemDesc)]
+#[system_desc(name(TronEmitSystemDesc))]
+pub struct TronEmitSystem;
+impl<'a> System<'a> for TronEmitSystem {
+    type SystemData = WriteExpect<'a, Scene>;
+
+    fn run(&mut self, mut rad_scene: Self::SystemData) {
+        let mut rand = rand::thread_rng();
+        use random_color::{Luminosity, RandomColor};
+        let mut rc = RandomColor::new();
+        rc.luminosity(Luminosity::Bright);
+        let color = if rand.gen_bool(0.1) {
+            rc.to_rgb_array()
+        } else {
+            [0; 3]
+        };
+        for emit in &mut rad_scene.emit {
             emit[0] = color[0] as f32 / 255.0;
             emit[1] = color[1] as f32 / 255.0;
             emit[2] = color[2] as f32 / 255.0;

@@ -181,7 +181,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
                 self.color_generation.resize(index + 1, 0);
             }
             if color_generation.0 != self.color_generation[index] {
-                println!("write color: {}", index);
+                // println!("write color: {}", index);
                 let quad_instances = <ReadStorage<'_, QuadInstance>>::fetch(world);
                 let mut qi = quad_instances.join().collect::<Vec<_>>();
 
@@ -189,7 +189,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
                 let instance_data_iter = qi.iter().map(|instance| instance.get_args());
                 instance_buffers.instance.write(
                     factory,
-                    0,
+                    index,
                     instance_buffers.instance_count as u64,
                     Some(instance_data_iter.collect::<Box<[Color]>>()),
                 );
@@ -213,7 +213,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawQuad<B> {
         if self.quad_mesh.is_none() {
             return;
         }
-
+        // println!("draw: {}", index);
         // Bind the pipeline to the the encoder
         encoder.bind_graphics_pipeline(&self.pipeline);
 
@@ -359,14 +359,13 @@ impl<B: Backend> RenderPlugin<B> for RenderQuad {
 }
 
 pub fn gen_quad_mesh<B: Backend>(queue: QueueId, factory: &Factory<B>) -> Mesh<B> {
-    let icosphere = genmesh::generators::Plane::new();
-    let indices: Vec<_> =
-        genmesh::Vertices::vertices(icosphere.indexed_polygon_iter().triangulate())
-            .map(|i| i as u32)
-            .collect();
+    let plane = genmesh::generators::Plane::new();
+    let indices: Vec<_> = genmesh::Vertices::vertices(plane.indexed_polygon_iter().triangulate())
+        .map(|i| i as u32)
+        .collect();
 
     println!("indices: {}", indices.len());
-    let vertices: Vec<_> = icosphere
+    let vertices: Vec<_> = plane
         .shared_vertex_iter()
         .map(|v| Position(v.pos.into()))
         .collect();
