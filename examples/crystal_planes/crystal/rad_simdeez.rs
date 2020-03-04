@@ -1,6 +1,7 @@
 use super::{ffs, util, PlanesSep};
 #[allow(unused_imports)]
-use super::{Bitmap, BlockMap, DisplayWrap, Point3, Point3i, Vec3, Vec3i};
+use super::{Bitmap, BlockMap, DisplayWrap};
+use crate::math::prelude::*;
 use amethyst::core::{
     ecs::{ReadExpect, SystemData, World},
     math,
@@ -8,7 +9,6 @@ use amethyst::core::{
 use rayon::prelude::*;
 use simdeez::{avx2::Avx2, sse2::Sse2, Simd};
 use std::time::Instant;
-
 pub struct RadBuffer {
     pub r: Vec<f32>,
     pub g: Vec<f32>,
@@ -50,9 +50,11 @@ impl RadBuffer {
         }
     }
 
+    #[allow(unused)]
     pub fn slice(&self, i: std::ops::Range<usize>) -> RadSlice<'_> {
         (&self.r[i.clone()], &self.g[i.clone()], &self.b[i.clone()])
     }
+    #[allow(unused)]
     pub fn slice_mut(&mut self, i: std::ops::Range<usize>) -> MutRadSlice<'_> {
         (
             &mut self.r[i.clone()],
@@ -64,10 +66,11 @@ impl RadBuffer {
     pub fn slice_full(&self) -> RadSlice<'_> {
         (&self.r[..], &self.g[..], &self.b[..])
     }
+    #[allow(unused)]
     pub fn slice_full_mut(&mut self) -> MutRadSlice<'_> {
         (&mut self.r[..], &mut self.g[..], &mut self.b[..])
     }
-
+    #[allow(unused)]
     pub fn chunks_mut(&mut self, size: usize) -> impl Iterator<Item = MutRadSlice<'_>> {
         itertools::izip!(
             self.r.chunks_mut(size),
@@ -106,10 +109,10 @@ pub struct Blocklist {
 
 impl Blocklist {
     pub fn from_extents(extents: &Vec<ffs::Extent>) -> Blocklist {
-        let mut vec16 = Vec::new();
+        let vec16 = Vec::new();
         let mut vec8 = Vec::new();
         let mut vec4 = Vec::new();
-        let mut vec2 = Vec::new();
+        let vec2 = Vec::new();
         // let mut vec16_ff = Vec::new();
         let mut vec8_ff = Vec::new();
         let mut vec4_ff = Vec::new();
@@ -145,7 +148,7 @@ impl Blocklist {
             vec8_ff: vec8_ff,
         }
     }
-
+    #[allow(unused)]
     pub fn print_stat(&self) {
         println!(
             "1: {} 4: {} 8: {}",
@@ -154,7 +157,7 @@ impl Blocklist {
             self.vec8.len(),
         );
     }
-
+    #[allow(unused)]
     pub fn num_formfactors(&self) -> usize {
         return self.single.len()
             + self.vec2.len() * 2
@@ -241,9 +244,13 @@ impl Scene {
         }
     }
 
-    pub fn apply_light(&mut self, world: &World, pos: Point3, color: Vec3) {
-        let (planes, bitmap) = <(ReadExpect<PlanesSep>, ReadExpect<BlockMap>)>::fetch(world);
-
+    pub fn apply_light(
+        &mut self,
+        planes: &PlanesSep,
+        bitmap: &BlockMap,
+        pos: &Point3,
+        color: &Vec3,
+    ) {
         let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32);
         for (i, plane) in planes.planes_iter().enumerate() {
             let trace_pos = plane.cell + plane.dir.get_normal();
@@ -270,7 +277,7 @@ impl Scene {
         self.do_rad_blocks();
         //self.do_rad_extents();
     }
-
+    #[allow(unused)]
     pub fn do_rad_extents(&mut self) {
         std::mem::swap(&mut self.rad_front, &mut self.rad_back);
 
@@ -335,7 +342,7 @@ impl Scene {
 
         std::mem::swap(&mut self.rad_front, &mut front);
     }
-
+    #[allow(unused)]
     pub fn print_stat(&self) {
         // println!("write blocks");
 
@@ -407,7 +414,6 @@ impl RadWorkblockSimd<'_> {
                 for (j, ff) in ff_i.vec4.iter().zip(&ff_i.vec4_ff) {
                     // unsafe {
                     let j = *j as usize;
-                    let jrange = j..j + 8;
                     let ff = *ff;
                     unsafe {
                         let vr = V::load_ps(&r.get_unchecked(j));
@@ -442,7 +448,6 @@ impl RadWorkblockSimd<'_> {
                 for (j, ff) in ff_i.vec8.iter().zip(&ff_i.vec8_ff) {
                     // unsafe {
                     let j = *j as usize;
-                    let jrange = j..j + 8;
                     let ff = *ff;
                     unsafe {
                         let vr = V::load_ps(&r.get_unchecked(j));

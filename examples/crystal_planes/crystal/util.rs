@@ -1,6 +1,6 @@
 use super::{Bitmap, Point3i};
 
-pub fn occluded(p0: Point3i, p1: Point3i, solid: &Bitmap) -> bool {
+pub fn occluded(p0: Point3i, p1: Point3i, solid: &dyn Bitmap) -> bool {
     // 3d bresenham, ripped from http://www.cobrabytes.com/index.php?topic=1150.0
 
     // println!("{} {}", DisplayWrap::from(p0), DisplayWrap::from(p1));

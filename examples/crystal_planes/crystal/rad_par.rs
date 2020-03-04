@@ -1,10 +1,10 @@
 use super::{ffs, util, PlanesSep};
 #[allow(unused_imports)]
-use super::{Bitmap, BlockMap, DisplayWrap, Point3, Point3i, Vec3, Vec3i};
+use super::{Bitmap, BlockMap, DisplayWrap};
+use crate::math::prelude::*;
 use amethyst::core::math;
 use rayon::prelude::*;
 use std::time::Instant;
-
 pub struct RadBuffer {
     pub r: Vec<f32>,
     pub g: Vec<f32>,

@@ -1,4 +1,4 @@
-use crate::{crystal::rads::Scene, quad, quad::QuadInstance};
+use crate::{crystal::rads::Scene, light, quad, quad::QuadInstance};
 use amethyst::{
     core::{
         ecs::{

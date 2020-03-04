@@ -1,4 +1,5 @@
-use super::{util, BlockMap, Dir, Plane, PlanesSep, Vec3};
+use super::{util, BlockMap, Dir, Plane, PlanesSep};
+use crate::math::prelude::*;
 use amethyst::core::math;
 use image::ImageBuffer;
 use std::{
@@ -6,7 +7,6 @@ use std::{
     fmt::Debug,
     io::{BufReader, BufWriter},
 };
-
 fn normal_cull(pl1: &Plane, pl2: &Plane) -> bool {
     let d1 = pl1.dir;
     let d2 = pl2.dir;

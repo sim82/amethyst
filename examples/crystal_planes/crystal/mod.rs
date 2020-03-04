@@ -3,9 +3,9 @@ pub mod ffs;
 // pub mod rad;
 
 // mod rad_expv;
-mod rad_impv;
-mod rad_par;
-mod rad_ref;
+// mod rad_impv;
+// mod rad_par;
+// mod rad_ref;
 mod rad_simdeez;
 use amethyst::core::{
     ecs::{Component, DenseVecStorage},
@@ -19,6 +19,7 @@ pub mod rads {
     pub use super::rad_simdeez::*;
 }
 pub mod util;
+use crate::math::prelude::*;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -28,15 +29,15 @@ use std::{
 
 pub type BlockMap = ndarray::Array3<bool>;
 
-pub type Vec2i = math::Vector2<i32>;
+// pub type Vec2i = math::Vector2<i32>;
 
-pub type Vec3i = math::Vector3<i32>;
-pub type Vec3 = math::Vector3<f32>;
+// pub type Vec3i = math::Vector3<i32>;
+// pub type Vec3 = math::Vector3<f32>;
 
-pub type Point2i = math::Point2<i32>;
-pub type Point3i = math::Point3<i32>;
-pub type Point3 = math::Point3<f32>;
-pub type Color = Vec3;
+// pub type Point2i = math::Point2<i32>;
+// pub type Point3i = math::Point3<i32>;
+// pub type Point3 = math::Point3<f32>;
+// pub type Color = Vec3;
 
 const NUM_PLANE_CORNERS: usize = 4;
 
@@ -412,6 +413,7 @@ impl PlanesSep {
         self.planes.append(&mut yzn_planes);
     }
 
+    #[allow(unused)]
     pub fn print(&self) {
         let mut x: Vec<(&Point3i, i32)> = self
             .vertices
@@ -429,7 +431,7 @@ impl PlanesSep {
             println!("{}", DisplayWrap::from(p.vertices));
         }
     }
-
+    #[allow(unused)]
     pub fn vertex_iter(&self) -> impl Iterator<Item = (&Point3i, i32)> + '_ {
         self.vertices.iter().enumerate().map(|(i, p)| (p, i as i32))
     }

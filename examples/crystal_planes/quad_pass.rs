@@ -1,16 +1,10 @@
 use amethyst::{
-    core::{
-        ecs::{
-            Component, DenseVecStorage, DispatcherBuilder, Join, Read, ReadExpect, ReadStorage,
-            SystemData, World, WriteExpect,
-        },
-        math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
-    },
+    core::ecs::{DispatcherBuilder, Join, Read, ReadStorage, SystemData, World},
     prelude::*,
     renderer::{
         bundle::{RenderOrder, RenderPlan, RenderPlugin, Target},
         pipeline::{PipelineDescBuilder, PipelinesBuilder},
-        pod::{IntoPod, ViewArgs},
+        pod::ViewArgs,
         rendy::{
             command::{QueueId, RenderPassEncoder},
             factory::Factory,
@@ -18,8 +12,8 @@ use amethyst::{
                 render::{PrepareResult, RenderGroup, RenderGroupDesc},
                 GraphContext, NodeBuffer, NodeImage,
             },
-            hal::{self, device::Device, format::Format, pso, pso::ShaderStageFlags},
-            mesh::{AsAttribute, AsVertex, Color, Mesh, Position, VertexFormat},
+            hal::{self, device::Device, pso},
+            mesh::{AsVertex, Color, Mesh, Position},
             shader::{Shader, SpirvShader},
         },
         submodules::{gather::CameraGatherer, DynamicUniform, DynamicVertexBuffer},
@@ -82,7 +76,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawQuadDesc {
         _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
         _queue: QueueId,
-        world: &World,
+        _world: &World,
         framebuffer_width: u32,
         framebuffer_height: u32,
         subpass: hal::pass::Subpass<'_, B>,

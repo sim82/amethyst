@@ -13,7 +13,7 @@ use amethyst::{
                 render::{PrepareResult, RenderGroup, RenderGroupDesc},
                 GraphContext, NodeBuffer, NodeImage,
             },
-            hal::{self, device::Device, format::Format, pso, pso::ShaderStageFlags},
+            hal::{self, device::Device, format::Format, pso},
             mesh::{AsVertex, VertexFormat},
             shader::{Shader, SpirvShader},
         },

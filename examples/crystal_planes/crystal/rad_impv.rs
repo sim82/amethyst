@@ -1,6 +1,7 @@
 use super::{ffs, util, PlanesSep};
 #[allow(unused_imports)]
-use super::{Bitmap, BlockMap, DisplayWrap, Point3, Point3i, Vec3, Vec3i};
+use super::{Bitmap, BlockMap, DisplayWrap};
+use crate::math::prelude::*;
 use amethyst::core::math;
 use rayon::prelude::*;
 use std::time::Instant;
@@ -13,6 +14,7 @@ pub struct RadBuffer {
 type RadSlice<'a> = (&'a [f32], &'a [f32], &'a [f32]);
 type MutRadSlice<'a> = (&'a mut [f32], &'a mut [f32], &'a mut [f32]);
 
+#[allow(unused)]
 impl RadBuffer {
     /// Utility for making specifically aligned vectors
     pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
@@ -124,7 +126,7 @@ fn from_slice2(v: &[f32]) -> [f32; 2] {
     array.copy_from_slice(src);
     array
 }
-
+#[allow(unused)]
 impl Blocklist {
     pub fn from_extents(extents: &Vec<ffs::Extent>) -> Blocklist {
         let mut vec16 = Vec::new();
@@ -211,6 +213,7 @@ fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
     Vec3::new(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z)
 }
 
+#[allow(unused)]
 impl Scene {
     pub fn new(planes: PlanesSep, bitmap: BlockMap) -> Self {
         let filename = "extents.bin";

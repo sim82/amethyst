@@ -4,23 +4,25 @@ extern crate itertools;
 
 mod crystal;
 mod custom_pass;
+mod light;
+mod math;
 mod quad;
 mod quad_pass;
 mod systems;
 mod vertex;
-
-use crate::quad_pass::{RenderQuad, Triangle};
+use crate::{
+    math::prelude::*,
+    quad_pass::{RenderQuad, Triangle},
+};
 use amethyst::{
     assets::{PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
     controls::{FlyControlBundle, HideCursor},
     core::{
-        math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
+        math::{Vector3, Vector4},
         transform::TransformBundle,
     },
     ecs::{prelude::*, WorldExt, WriteExpect},
-    input::{
-        is_key_down, is_mouse_button_down, InputBundle, InputEvent, ScrollDirection, StringBindings,
-    },
+    input::{is_key_down, is_mouse_button_down, InputBundle, StringBindings},
     prelude::*,
     renderer::{
         palette::Srgb,
@@ -40,6 +42,7 @@ type MyPrefabData = BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)
 enum LightMode {
     RandomFlashing,
     Tron,
+    LightSources,
 }
 
 impl Default for LightMode {
@@ -62,9 +65,15 @@ impl SimpleState for MapLoadState {
         // let planes_copy: Vec<crystal::Plane> = planes.planes_iter().cloned().collect();
         world.register::<crystal::Plane>();
         world.register::<quad::QuadInstance>();
-
+        world.register::<light::PointLight>();
         world.insert(Some(quad::ColorGeneration(0)));
         world.insert(LightMode::RandomFlashing);
+
+        world
+            .create_entity()
+            .named("the pointlight")
+            .with(light::PointLight::default())
+            .build();
 
         for (i, p) in planes.planes_iter().cloned().enumerate() {
             let point = &p.cell;
@@ -164,6 +173,8 @@ impl SimpleState for ExampleState {
                 *light_mode = LightMode::RandomFlashing;
             } else if is_key_down(&event, VirtualKeyCode::Key2) {
                 *light_mode = LightMode::Tron;
+            } else if is_key_down(&event, VirtualKeyCode::Key3) {
+                *light_mode = LightMode::LightSources;
             }
         }
 
@@ -212,10 +223,19 @@ fn main() -> Result<(), Error> {
             "tron_emit_system",
             &[],
         )
+        .with(
+            light::ApplyLightsSystem {}.pausable(LightMode::LightSources),
+            "apply_lights_system",
+            &[],
+        )
         .with_system_desc(
             systems::RunRadSceneSystemDesc::default(),
             "run_rad_system",
-            &["random_flashing_emit_system", "tron_emit_system"],
+            &[
+                "random_flashing_emit_system",
+                "tron_emit_system",
+                "apply_lights_system",
+            ],
         )
         .with_system_desc(
             systems::CopyRadFrontSystemDesc::default(),
