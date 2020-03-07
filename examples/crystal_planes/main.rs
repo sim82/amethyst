@@ -14,8 +14,8 @@ use crate::quad_pass::RenderQuad;
 use amethyst::{
     animation::{
         get_animation_set, Animation, AnimationBundle, AnimationCommand, AnimationControlSet,
-        AnimationSet, AnimationSetPrefab, EndControl, InterpolationFunction, Sampler,
-        SamplerPrimitive, TransformChannel,
+        AnimationSet, AnimationSetPrefab, DeferStartRelation, EndControl, InterpolationFunction,
+        Sampler, SamplerPrimitive, TransformChannel,
     },
     assets::{Loader, PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
     controls::{FlyControlBundle, HideCursor},
@@ -39,7 +39,19 @@ use amethyst::{
     Error,
 };
 
-type MyPrefabData = BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)>;
+use serde::{Deserialize, Serialize};
+type MyPrefabData = (
+    Option<BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)>>,
+    Option<AnimationSetPrefab<AnimationId, Transform>>,
+);
+
+#[derive(Eq, PartialOrd, PartialEq, Hash, Debug, Copy, Clone, Deserialize, Serialize)]
+enum AnimationId {
+    Scale,
+    Rotate,
+    Translate,
+    Test,
+}
 
 #[derive(PartialEq, Debug)]
 enum LightMode {
@@ -53,8 +65,6 @@ impl Default for LightMode {
         LightMode::RandomFlashing
     }
 }
-
-struct ExampleState;
 
 struct MapLoadState;
 impl SimpleState for MapLoadState {
@@ -108,55 +118,61 @@ impl SimpleState for MapLoadState {
     }
 }
 
+struct ExampleState;
+
 impl SimpleState for ExampleState {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
         let prefab_handle = data.world.exec(|loader: PrefabLoader<'_, MyPrefabData>| {
-            loader.load("prefab/fly_camera.ron", RonFormat, ())
+            loader.load("prefab/crystal_planes.ron", RonFormat, ())
         });
         let world = data.world;
 
-        world
+        let scene = world
             .create_entity()
-            .named("Fly Camera Scene")
+            .named("Crystal Planes Scene")
             .with(prefab_handle)
             .build();
 
-        // Add some triangles
-        world
-            .create_entity()
-            .with(Triangle {
-                points: [[0., 0.], [0., 1.], [1., 0.0]],
-                colors: [[1., 0., 0., 1.], [0., 1., 0., 1.], [0., 0., 1., 1.]],
-            })
-            .build();
-        world
-            .create_entity()
-            .with(Triangle {
-                points: [[-2., -1.], [0., -1.], [-1., 1.0]],
-                colors: [[1., 1., 0., 1.], [0., 1., 1., 1.], [1., 0., 1., 1.]],
-            })
-            .build();
-        world
-            .create_entity()
-            .with(Triangle {
-                points: [[0.2, -0.7], [0.4, -0.1], [0.8, -1.5]],
-                colors: [[1., 0., 0., 1.], [0., 0., 0., 1.], [1., 1., 1., 1.]],
-            })
-            .build();
+        {
+            let (animation_set, animation) = {
+                let loader = world.read_resource::<Loader>();
 
-        world
-            .create_entity()
-            .with(Triangle {
-                points: [[-0.2, 0.7], [-0.4, 0.1], [-0.8, 0.5]],
-                colors: [
-                    [0.337, 0.176, 0.835, 1.],
-                    [0.337, 0.176, 0.835, 1.],
-                    [0.337, 0.176, 0.835, 1.],
-                ],
-            })
-            .build();
+                let sampler = loader.load_from_data(
+                    Sampler {
+                        input: vec![0., 1.],
+                        output: vec![
+                            SamplerPrimitive::Vec3([0., 0., 0.]),
+                            SamplerPrimitive::Vec3([0., 1., 0.]),
+                        ],
+                        function: InterpolationFunction::Step,
+                    },
+                    (),
+                    &world.read_resource(),
+                );
+
+                let animation = loader.load_from_data(
+                    Animation::new_single(0, TransformChannel::Translation, sampler),
+                    (),
+                    &world.read_resource(),
+                );
+                let mut animation_set: AnimationSet<AnimationId, Transform> = AnimationSet::new();
+                animation_set.insert(AnimationId::Test, animation.clone());
+                (animation_set, animation)
+            };
+
+            let entity = world.create_entity().with(animation_set).build();
+            let mut storage = world.write_storage::<AnimationControlSet<AnimationId, Transform>>();
+            let control_set = get_animation_set(&mut storage, entity).unwrap();
+            control_set.add_animation(
+                AnimationId::Test,
+                &animation,
+                EndControl::Loop(None),
+                1.0,
+                AnimationCommand::Start,
+            );
+        }
+        add_animation(world, scene, AnimationId::Translate, 1.0, None, false);
     }
-
     fn handle_event(
         &mut self,
         data: StateData<'_, GameData<'_, '_>>,
@@ -179,6 +195,9 @@ impl SimpleState for ExampleState {
             } else if is_key_down(&event, VirtualKeyCode::Key3) {
                 *light_mode = LightMode::LightSources;
             }
+            //  else if is_key_down(&event, VirtualKeyCode::P) {
+            //     self.display_loaded_entities(world);
+            // }
         }
 
         // println!("LightMode: {:?}", *light_mode);
@@ -254,7 +273,13 @@ fn main() -> Result<(), Error> {
             .with_sensitivity(0.1, 0.1)
             .with_speed(10.0),
         )?
-        .with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
+        .with_bundle(AnimationBundle::<AnimationId, Transform>::new(
+            "animation_control_system",
+            "sampler_interpolation_system",
+        ))?
+        .with_bundle(
+            TransformBundle::new().with_dep(&["fly_movement", "sampler_interpolation_system"]),
+        )?
         .with_bundle(
             InputBundle::<StringBindings>::new().with_bindings_from_file(&key_bindings_path)?,
         )?
@@ -276,4 +301,49 @@ fn main() -> Result<(), Error> {
     let mut game = Application::build(assets_dir, MapLoadState)?.build(game_data)?;
     game.run();
     Ok(())
+}
+
+fn add_animation(
+    world: &mut World,
+    entity: Entity,
+    id: AnimationId,
+    rate: f32,
+    defer: Option<(AnimationId, DeferStartRelation)>,
+    toggle_if_exists: bool,
+) {
+    let animation = world
+        .read_storage::<AnimationSet<AnimationId, Transform>>()
+        .get(entity)
+        .and_then(|s| s.get(&id))
+        .cloned()
+        .unwrap();
+    let mut sets = world.write_storage();
+    let control_set = get_animation_set::<AnimationId, Transform>(&mut sets, entity).unwrap();
+    match defer {
+        None => {
+            if toggle_if_exists && control_set.has_animation(id) {
+                control_set.toggle(id);
+            } else {
+                control_set.add_animation(
+                    id,
+                    &animation,
+                    EndControl::Normal,
+                    rate,
+                    AnimationCommand::Start,
+                );
+            }
+        }
+
+        Some((defer_id, defer_relation)) => {
+            control_set.add_deferred_animation(
+                id,
+                &animation,
+                EndControl::Normal,
+                rate,
+                AnimationCommand::Start,
+                defer_id,
+                defer_relation,
+            );
+        }
+    }
 }
