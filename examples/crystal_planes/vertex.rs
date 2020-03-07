@@ -1,9 +1,9 @@
-use amethyst::{
-    prelude::*,
-    renderer::rendy::{
-        hal::format::Format,
-        mesh::{AsAttribute, AsVertex, VertexFormat},
-    },
+#[allow(unused_imports)]
+use amethyst::prelude::*;
+
+use amethyst::renderer::rendy::{
+    hal::format::Format,
+    mesh::{AsAttribute, AsVertex, VertexFormat},
 };
 
 // custom attributes

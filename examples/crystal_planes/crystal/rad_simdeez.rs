@@ -415,15 +415,13 @@ impl RadWorkblockSimd<'_> {
                     // unsafe {
                     let j = *j as usize;
                     let ff = *ff;
-                    unsafe {
-                        let vr = V::load_ps(&r.get_unchecked(j));
-                        let vg = V::load_ps(&g.get_unchecked(j));
-                        let vb = V::load_ps(&b.get_unchecked(j));
+                    let vr = V::load_ps(&r.get_unchecked(j));
+                    let vg = V::load_ps(&g.get_unchecked(j));
+                    let vb = V::load_ps(&b.get_unchecked(j));
 
-                        vsum_r += vdiffuse_r * ff * vr;
-                        vsum_g += vdiffuse_g * ff * vg;
-                        vsum_b += vdiffuse_b * ff * vb;
-                    }
+                    vsum_r += vdiffuse_r * ff * vr;
+                    vsum_g += vdiffuse_g * ff * vg;
+                    vsum_b += vdiffuse_b * ff * vb;
                 }
                 let mut vtmp = [0f32; V::VF32_WIDTH];
                 V::store_ps(&mut vtmp[0], vsum_r);
@@ -449,15 +447,13 @@ impl RadWorkblockSimd<'_> {
                     // unsafe {
                     let j = *j as usize;
                     let ff = *ff;
-                    unsafe {
-                        let vr = V::load_ps(&r.get_unchecked(j));
-                        let vg = V::load_ps(&g.get_unchecked(j));
-                        let vb = V::load_ps(&b.get_unchecked(j));
+                    let vr = V::load_ps(&r.get_unchecked(j));
+                    let vg = V::load_ps(&g.get_unchecked(j));
+                    let vb = V::load_ps(&b.get_unchecked(j));
 
-                        vsum_r += vdiffuse_r * ff * vr;
-                        vsum_g += vdiffuse_g * ff * vg;
-                        vsum_b += vdiffuse_b * ff * vb;
-                    }
+                    vsum_r += vdiffuse_r * ff * vr;
+                    vsum_g += vdiffuse_g * ff * vg;
+                    vsum_b += vdiffuse_b * ff * vb;
                 }
                 let mut vtmp = [0f32; V::VF32_WIDTH];
                 V::store_ps(&mut vtmp[0], vsum_r);

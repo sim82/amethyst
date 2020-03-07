@@ -451,7 +451,7 @@ pub fn to_height(c: char) -> i32 {
         _ => 0,
     }
 }
-pub fn read_map_slice(reader: &mut std::io::BufRead, size: Vec2i) -> std::io::Result<MapSlice> {
+pub fn read_map_slice(reader: &mut dyn std::io::BufRead, size: Vec2i) -> std::io::Result<MapSlice> {
     // let mut slice = vec![vec![width,
 
     let mut slice = Vec::new(); //vec![vec![0;0]];

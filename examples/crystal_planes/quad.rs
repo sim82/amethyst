@@ -1,37 +1,15 @@
 use crate::vertex::QuadInstanceArgsConst;
+#[allow(unused_imports)]
+use amethyst::prelude::*;
 use amethyst::{
     core::{
-        ecs::{
-            Component, DenseVecStorage, DispatcherBuilder, Join, ReadExpect, ReadStorage, System,
-            SystemData, World, Write, WriteStorage,
-        },
-        math::{convert, Matrix4, Point2, Point3, Vector2, Vector3, Vector4},
+        ecs::{Component, DenseVecStorage, Join, System, SystemData, Write, WriteStorage},
+        math::{Vector3, Vector4},
     },
-    prelude::*,
-    renderer::{
-        bundle::{RenderOrder, RenderPlan, RenderPlugin, Target},
-        pipeline::{PipelineDescBuilder, PipelinesBuilder},
-        pod::{IntoPod, ViewArgs},
-        rendy::{
-            command::{QueueId, RenderPassEncoder},
-            factory::Factory,
-            graph::{
-                render::{PrepareResult, RenderGroup, RenderGroupDesc},
-                GraphContext, NodeBuffer, NodeImage,
-            },
-            hal::{self, device::Device, format::Format, pso, pso::ShaderStageFlags},
-            mesh::{AsAttribute, AsVertex, Color, Mesh, Position, VertexFormat},
-            shader::{Shader, SpirvShader},
-        },
-        submodules::{gather::CameraGatherer, DynamicUniform, DynamicVertexBuffer},
-        types::Backend,
-        util, ChangeDetection,
-    },
+    renderer::rendy::mesh::Color,
 };
 use amethyst_derive::SystemDesc;
 use rand::Rng; //prelude::*;
-
-use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub struct QuadInstance {

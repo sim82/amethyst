@@ -10,16 +10,19 @@ mod quad;
 mod quad_pass;
 mod systems;
 mod vertex;
-use crate::{
-    math::prelude::*,
-    quad_pass::{RenderQuad, Triangle},
-};
+use crate::quad_pass::RenderQuad;
 use amethyst::{
-    assets::{PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
+    animation::{
+        get_animation_set, Animation, AnimationBundle, AnimationCommand, AnimationControlSet,
+        AnimationSet, AnimationSetPrefab, EndControl, InterpolationFunction, Sampler,
+        SamplerPrimitive, TransformChannel,
+    },
+    assets::{Loader, PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
     controls::{FlyControlBundle, HideCursor},
     core::{
         math::{Vector3, Vector4},
         transform::TransformBundle,
+        Transform,
     },
     ecs::{prelude::*, WorldExt, WriteExpect},
     input::{is_key_down, is_mouse_button_down, InputBundle, StringBindings},
