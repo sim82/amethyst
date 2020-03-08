@@ -114,11 +114,19 @@ impl SimpleState for MapLoadState {
         let rad_scene = crystal::rads::Scene::new(world);
         world.insert(rad_scene);
         println!("load done");
-        Trans::Replace(Box::new(ExampleState))
+        Trans::Replace(Box::new(ExampleState::default()))
     }
 }
 
-struct ExampleState;
+struct ExampleState {
+    scene: Option<Entity>,
+}
+
+impl Default for ExampleState {
+    fn default() -> Self {
+        ExampleState { scene: None }
+    }
+}
 
 impl SimpleState for ExampleState {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
@@ -127,11 +135,13 @@ impl SimpleState for ExampleState {
         });
         let world = data.world;
 
-        let scene = world
-            .create_entity()
-            .named("Crystal Planes Scene")
-            .with(prefab_handle)
-            .build();
+        self.scene = Some(
+            world
+                .create_entity()
+                .named("Crystal Planes Scene")
+                .with(prefab_handle)
+                .build(),
+        );
 
         {
             let (animation_set, animation) = {
@@ -171,7 +181,6 @@ impl SimpleState for ExampleState {
                 AnimationCommand::Start,
             );
         }
-        add_animation(world, scene, AnimationId::Translate, 1.0, None, false);
     }
     fn handle_event(
         &mut self,
@@ -194,6 +203,15 @@ impl SimpleState for ExampleState {
                 *light_mode = LightMode::Tron;
             } else if is_key_down(&event, VirtualKeyCode::Key3) {
                 *light_mode = LightMode::LightSources;
+            } else if is_key_down(&event, VirtualKeyCode::O) {
+                add_animation(
+                    world,
+                    self.scene.unwrap(),
+                    AnimationId::Translate,
+                    1.0,
+                    None,
+                    false,
+                );
             }
             //  else if is_key_down(&event, VirtualKeyCode::P) {
             //     self.display_loaded_entities(world);
@@ -304,19 +322,28 @@ fn main() -> Result<(), Error> {
 }
 
 fn add_animation(
-    world: &mut World,
+    world: &World,
     entity: Entity,
     id: AnimationId,
     rate: f32,
     defer: Option<(AnimationId, DeferStartRelation)>,
     toggle_if_exists: bool,
 ) {
-    let animation = world
-        .read_storage::<AnimationSet<AnimationId, Transform>>()
-        .get(entity)
-        .and_then(|s| s.get(&id))
+    let anim_set_storage = world.read_storage::<AnimationSet<AnimationId, Transform>>();
+    let anim_set = anim_set_storage.get(entity);
+    println!("anim_set: {:?}", anim_set);
+    let animation = anim_set
+        .expect("missing AnimationSet")
+        .get(&id)
         .cloned()
         .unwrap();
+
+    // let animation = world
+    //     .read_storage::<AnimationSet<AnimationId, Transform>>()
+    //     .get(entity)
+    //     .and_then(|s| s.get(&id))
+    //     .cloned()
+    //     .unwrap();
     let mut sets = world.write_storage();
     let control_set = get_animation_set::<AnimationId, Transform>(&mut sets, entity).unwrap();
     match defer {

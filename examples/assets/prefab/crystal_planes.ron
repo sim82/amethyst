@@ -46,6 +46,7 @@ Prefab (
             )
         ),
         (
+            parent: 0,
             data: (
                 (
                     graphics: (
