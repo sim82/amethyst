@@ -32,11 +32,11 @@ Prefab (
                             samplers: [(0, Translation, (
                                 input: [0., 1., 2., 3., 4.],
                                 output: [
-                                    Vec3((0., 0., 0.)),
-                                    Vec3((1., 0., 0.)),
-                                    Vec3((0., 0., 0.)),
-                                    Vec3((-1., 0., 0.)),
-                                    Vec3((0., 0., 0.)),
+                                    Vec3((0., 40., 0.)),
+                                    Vec3((60., 40., 0.)),
+                                    Vec3((60., 40., 60.)),
+                                    Vec3((0., 40., 60.)),
+                                    Vec3((0., 40., 0.)),
                                 ],
                                 function: Linear,
                             ))]
@@ -57,6 +57,13 @@ Prefab (
                     ),
                     transform: (
                         translation: (0.0, 0.0, -4.0)
+                    ),
+                    light: (
+                        light: Point((
+                            intensity: 3.0,
+                            color: (1.0, 1.0, 1.0),
+                            radius: 5.0,
+                        )),
                     )
                 ),
                 None

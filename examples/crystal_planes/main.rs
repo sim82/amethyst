@@ -58,6 +58,7 @@ enum LightMode {
     RandomFlashing,
     Tron,
     LightSources,
+    RendyLightSources,
 }
 
 impl Default for LightMode {
@@ -203,12 +204,14 @@ impl SimpleState for ExampleState {
                 *light_mode = LightMode::Tron;
             } else if is_key_down(&event, VirtualKeyCode::Key3) {
                 *light_mode = LightMode::LightSources;
+            } else if is_key_down(&event, VirtualKeyCode::Key4) {
+                *light_mode = LightMode::RendyLightSources;
             } else if is_key_down(&event, VirtualKeyCode::O) {
                 add_animation(
                     world,
                     self.scene.unwrap(),
                     AnimationId::Translate,
-                    1.0,
+                    0.25,
                     None,
                     false,
                 );
@@ -268,6 +271,11 @@ fn main() -> Result<(), Error> {
             "apply_lights_system",
             &[],
         )
+        .with(
+            light::ApplyRendyLightsSystem {}.pausable(LightMode::RendyLightSources),
+            "apply_rendy_lights_system",
+            &[],
+        )
         .with_system_desc(
             systems::RunRadSceneSystemDesc::default(),
             "run_rad_system",
@@ -275,6 +283,7 @@ fn main() -> Result<(), Error> {
                 "random_flashing_emit_system",
                 "tron_emit_system",
                 "apply_lights_system",
+                "apply_rendy_lights_system",
             ],
         )
         .with_system_desc(
@@ -354,7 +363,7 @@ fn add_animation(
                 control_set.add_animation(
                     id,
                     &animation,
-                    EndControl::Normal,
+                    EndControl::Loop(None),
                     rate,
                     AnimationCommand::Start,
                 );
