@@ -17,36 +17,37 @@ pub struct RadBuffer {
 type RadSlice<'a> = (&'a [f32], &'a [f32], &'a [f32]);
 type MutRadSlice<'a> = (&'a mut [f32], &'a mut [f32], &'a mut [f32]);
 
+pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
+    let t_size = std::mem::size_of::<T>();
+    let t_align = std::mem::align_of::<T>();
+    let layout = if t_align >= align {
+        std::alloc::Layout::from_size_align(t_size * len, t_align).unwrap()
+    } else {
+        std::alloc::Layout::from_size_align(t_size * len, align).unwrap()
+    };
+    unsafe {
+        let mem = std::alloc::alloc(layout);
+        assert_eq!((mem as usize) % 16, 0);
+        Vec::<T>::from_raw_parts(mem as *mut T, len, len)
+    }
+}
+
+pub fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
+    let mut v = aligned_vector::<T>(len, align);
+    for x in v.iter_mut() {
+        *x = init;
+    }
+    v
+}
+
 impl RadBuffer {
     /// Utility for making specifically aligned vectors
-    pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
-        let t_size = std::mem::size_of::<T>();
-        let t_align = std::mem::align_of::<T>();
-        let layout = if t_align >= align {
-            std::alloc::Layout::from_size_align(t_size * len, t_align).unwrap()
-        } else {
-            std::alloc::Layout::from_size_align(t_size * len, align).unwrap()
-        };
-        unsafe {
-            let mem = std::alloc::alloc(layout);
-            assert_eq!((mem as usize) % 16, 0);
-            Vec::<T>::from_raw_parts(mem as *mut T, len, len)
-        }
-    }
-
-    pub fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
-        let mut v = Self::aligned_vector::<T>(len, align);
-        for x in v.iter_mut() {
-            *x = init;
-        }
-        v
-    }
 
     fn new(size: usize) -> RadBuffer {
         RadBuffer {
-            r: Self::aligned_vector_init(size, 64, 0f32),
-            g: Self::aligned_vector_init(size, 64, 0f32),
-            b: Self::aligned_vector_init(size, 64, 0f32),
+            r: aligned_vector_init(size, 64, 0f32),
+            g: aligned_vector_init(size, 64, 0f32),
+            b: aligned_vector_init(size, 64, 0f32),
         }
     }
 
@@ -363,6 +364,7 @@ struct RadWorkblockSimd<'a> {
     blocks: &'a [Blocklist],
     emit: &'a [Vec3],
     diffuse: &'a [Vec3],
+    vtmp: Vec<f32>,
 }
 
 impl RadWorkblockSimd<'_> {
@@ -379,6 +381,7 @@ impl RadWorkblockSimd<'_> {
             blocks: blocks,
             emit: emit,
             diffuse: diffuse,
+            vtmp: aligned_vector_init(16, 64, 0.0),
         }
     }
     pub fn do_iter(&mut self) -> usize {
@@ -423,13 +426,12 @@ impl RadWorkblockSimd<'_> {
                     vsum_g += vdiffuse_g * ff * vg;
                     vsum_b += vdiffuse_b * ff * vb;
                 }
-                let mut vtmp = [0f32; V::VF32_WIDTH];
-                V::store_ps(&mut vtmp[0], vsum_r);
-                rad_r += vtmp.iter().sum::<f32>();
-                V::store_ps(&mut vtmp[0], vsum_g);
-                rad_g += vtmp.iter().sum::<f32>();
-                V::store_ps(&mut vtmp[0], vsum_b);
-                rad_b += vtmp.iter().sum::<f32>();
+                V::store_ps(&mut self.vtmp[0], vsum_r);
+                rad_r += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
+                V::store_ps(&mut self.vtmp[0], vsum_g);
+                rad_g += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
+                V::store_ps(&mut self.vtmp[0], vsum_b);
+                rad_b += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
             }
 
             unsafe {
@@ -455,13 +457,12 @@ impl RadWorkblockSimd<'_> {
                     vsum_g += vdiffuse_g * ff * vg;
                     vsum_b += vdiffuse_b * ff * vb;
                 }
-                let mut vtmp = [0f32; V::VF32_WIDTH];
-                V::store_ps(&mut vtmp[0], vsum_r);
-                rad_r += vtmp.iter().sum::<f32>();
-                V::store_ps(&mut vtmp[0], vsum_g);
-                rad_g += vtmp.iter().sum::<f32>();
-                V::store_ps(&mut vtmp[0], vsum_b);
-                rad_b += vtmp.iter().sum::<f32>();
+                V::store_ps(&mut self.vtmp[0], vsum_r);
+                rad_r += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
+                V::store_ps(&mut self.vtmp[0], vsum_g);
+                rad_g += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
+                V::store_ps(&mut self.vtmp[0], vsum_b);
+                rad_b += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
             }
             self.dest.0[i as usize] = self.emit[i as usize].x + rad_r;
             self.dest.1[i as usize] = self.emit[i as usize].y + rad_g;
