@@ -1,4 +1,10 @@
-use crate::{crystal::rads::Scene, quad, quad::QuadInstance};
+use crate::{
+    crystal,
+    crystal::{rads::Scene, PlanesSep},
+    math::prelude::*,
+    quad,
+    quad::QuadInstance,
+};
 
 #[allow(unused_imports)]
 use amethyst::prelude::*;
@@ -87,5 +93,42 @@ impl<'a> System<'a> for CopyRadFrontSystem {
         if let Some(ref mut color_generation) = *color_generation {
             color_generation.0 += 1;
         }
+    }
+}
+
+#[derive(SystemDesc)]
+#[system_desc(name(ApplyDiffuseColorSystemDesc))]
+pub struct ApplyDiffuseColorSystem {
+    up_to_date: bool,
+}
+impl Default for ApplyDiffuseColorSystem {
+    fn default() -> Self {
+        ApplyDiffuseColorSystem { up_to_date: false }
+    }
+}
+impl<'a> System<'a> for ApplyDiffuseColorSystem {
+    type SystemData = (WriteExpect<'a, PlanesSep>, WriteExpect<'a, Scene>);
+
+    fn run(&mut self, (mut planes, mut scene): Self::SystemData) {
+        if self.up_to_date {
+            return;
+        }
+        let color1 = Vec3::new(1f32, 0.5f32, 0f32);
+        // let color2 = hsv_to_rgb(rng.gen_range(0.0, 360.0), 1.0, 1.0);
+        let color2 = Vec3::new(0f32, 1f32, 0f32);
+        for (i, plane) in planes.planes_iter().enumerate() {
+            if ((plane.cell.y) / 2) % 2 == 1 {
+                continue;
+            }
+            scene.diffuse[i] = match plane.dir {
+                crystal::Dir::XyPos => color1,
+                crystal::Dir::XyNeg => color2,
+                crystal::Dir::YzPos | crystal::Dir::YzNeg => Vec3::new(0.8f32, 0.8f32, 0.8f32),
+                _ => Vec3::new(1f32, 1f32, 1f32),
+                // let color = hsv_to_rgb(rng.gen_range(0.0, 360.0), 1.0, 1.0); //random::<f32>(), 1.0, 1.0);
+                // scene.diffuse[i] = Vector3::new(color.0, color.1, color.2);
+            }
+        }
+        self.up_to_date = true;
     }
 }

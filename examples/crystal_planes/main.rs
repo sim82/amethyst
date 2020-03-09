@@ -34,7 +34,11 @@ use amethyst::{
         types::DefaultBackend,
         RenderingBundle,
     },
-    utils::{application_root_dir, scene::BasicScenePrefab},
+    utils::{
+        application_root_dir,
+        auto_fov::{AutoFov, AutoFovSystem},
+        scene::BasicScenePrefab,
+    },
     winit::{MouseButton, VirtualKeyCode},
     Error,
 };
@@ -253,6 +257,7 @@ fn main() -> Result<(), Error> {
     let key_bindings_path = app_root.join("examples/fly_camera/config/input.ron");
 
     let game_data = GameDataBuilder::default()
+        .with(AutoFovSystem::default(), "auto_fov", &[])
         .with_system_desc(PrefabLoaderSystemDesc::<MyPrefabData>::default(), "", &[])
         // .with_system_desc(quad::DiscoSystemDesc::default(), "disco_system", &[])
         .with(
@@ -276,6 +281,11 @@ fn main() -> Result<(), Error> {
             "apply_rendy_lights_system",
             &[],
         )
+        .with(
+            systems::ApplyDiffuseColorSystem::default(),
+            "apply_diffuse_color_system",
+            &[],
+        )
         .with_system_desc(
             systems::RunRadSceneSystemDesc::default(),
             "run_rad_system",
@@ -284,6 +294,7 @@ fn main() -> Result<(), Error> {
                 "tron_emit_system",
                 "apply_lights_system",
                 "apply_rendy_lights_system",
+                "apply_diffuse_color_system",
             ],
         )
         .with_system_desc(
