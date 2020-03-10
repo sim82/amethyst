@@ -66,15 +66,26 @@ impl<'a> System<'a> for ApplyRendyLightsSystem {
 
     fn run(&mut self, (mut rad_scene, planes, blockmap, light, transform): Self::SystemData) {
         rad_scene.clear_emit();
-        for (_light, transform) in (&light, &transform).join() {
-            // FIXME: this is broken, and much too complicated for just getting the light's global translation...
-            let pos = transform.global_view_matrix().try_inverse().unwrap()
-                * Vec4::new(0.0, 0.0, 0.0, 1.0);
-            println!("transform: {:?}", transform);
-            let pos = Point3::from_homogeneous(pos).unwrap();
-            println!("pos: {:?}", pos);
+        for (light, transform) in (&light, &transform).join() {
+            if let Light::Point(point_light) = light {
+                // FIXME: this is broken, and much too complicated for just getting the light's global translation...
+                let pos = transform.global_view_matrix().try_inverse().unwrap()
+                    * Vec4::new(0.0, 0.0, 0.0, 1.0);
+                println!("transform: {:?}", transform);
+                let pos = Point3::from_homogeneous(pos).unwrap();
+                println!("pos: {:?}", pos);
 
-            rad_scene.apply_light(&planes, &blockmap, &pos, &Color::new(1.0, 0.8, 0.8));
+                rad_scene.apply_light(
+                    &planes,
+                    &blockmap,
+                    &pos,
+                    &Color::new(
+                        point_light.color.red,
+                        point_light.color.green,
+                        point_light.color.blue,
+                    ),
+                );
+            }
         }
     }
 }
