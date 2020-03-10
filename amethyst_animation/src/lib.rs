@@ -76,6 +76,7 @@ pub use self::{
 };
 
 mod bundle;
+mod light;
 mod material;
 mod prefab;
 mod resources;
