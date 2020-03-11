@@ -1,52 +1,13 @@
 #![enable(implicit_some)]
 /*!
     @import /amethyst_assets/src/prefab/mod.rs#Prefab
-    @import ../../animation/main.rs#MyPrefabData
-    Prefab<MyPrefabData>
-*/
-
-#![enable(implicit_some)]
-/*!
-    @import /amethyst_assets/src/prefab/mod.rs#Prefab
-    @import ../../fly_camera/main.rs#MyPrefabData
+    @import ../../crystal_planes/main.rs#MyPrefabData
     Prefab<MyPrefabData>
 */
 
 Prefab (
     entities: [
         (
-            data: (
-                (
-                    transform: (),
-                    light: (ambient_color: ((0.1, 0.1, 0.1, 1.0)))
-                ),
-                (
-                    animations: [
-                        // each animation is defined by an id, and a set of samplers
-                        
-                        (Translate, (
-                            // each sampler consist of:
-                            //   * target entity (which is an index in this prefab),
-                            //   * animation channel, here the attribute on Transform
-                            //   * interpolation data and function
-                            samplers: [(0, Translation, (
-                                input: [0., 1., 2., 3., 4.],
-                                output: [
-                                    Vec3((0., 40., 0.)),
-                                    Vec3((60., 40., 0.)),
-                                    Vec3((60., 40., 60.)),
-                                    Vec3((0., 40., 60.)),
-                                    Vec3((0., 40., 0.)),
-                                ],
-                                function: Linear,
-                            ))]
-                        )),
-                    ],
-                )
-            )
-        ),
-        (
-            parent: 0,
             data: (
                 (
                     graphics: (
@@ -66,7 +27,52 @@ Prefab (
                         )),
                     )
                 ),
-                None
+                (
+                    animations: [
+                        // each animation is defined by an id, and a set of samplers
+                        (Translate, (
+                            // each sampler consist of:
+                            //   * target entity (which is an index in this prefab),
+                            //   * animation channel, here the attribute on Transform
+                            //   * interpolation data and function
+                            samplers: [(0, Translation, (
+                                input: [0., 1., 2., 3., 4.],
+                                output: [
+                                    Vec3((0., 40., 0.)),
+                                    Vec3((60., 40., 0.)),
+                                    Vec3((60., 40., 60.)),
+                                    Vec3((0., 40., 60.)),
+                                    Vec3((0., 40., 0.)),
+                                ],
+                                function: Linear,
+                            )),
+                            
+                            ]
+                        )),
+                    ],
+                ),
+                (
+                    animations: [
+                        // each animation is defined by an id, and a set of samplers
+                        (Translate, (
+                            // each sampler consist of:
+                            //   * target entity (which is an index in this prefab),
+                            //   * animation channel, here the attribute on Transform
+                            //   * interpolation data and function
+                            samplers: [(0, Color, (
+                                input: [0., 1., 2., 3., 4.],
+                                output: [
+                                    Vec3((0., 1.0, 0.)),
+                                    Vec3((1.0, 1.0, 0.)),
+                                    Vec3((1.0, 1.0, 1.0)),
+                                    Vec3((0., 1.0, 1.0)),
+                                    Vec3((0., 1.0, 0.)),
+                                ],
+                                function: Linear,
+                            ))]
+                        )),
+                    ],
+                )
             )
         ),
         (
@@ -85,6 +91,7 @@ Prefab (
                     // fly control tag
                     control_tag: ()
                 ),
+                None,
                 None
             )
         )

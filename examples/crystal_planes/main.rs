@@ -28,6 +28,7 @@ use amethyst::{
     input::{is_key_down, is_mouse_button_down, InputBundle, StringBindings},
     prelude::*,
     renderer::{
+        light::Light,
         palette::Srgb,
         plugins::{RenderShaded3D, RenderSkybox, RenderToWindow},
         rendy::mesh::{Normal, Position, TexCoord},
@@ -47,6 +48,7 @@ use serde::{Deserialize, Serialize};
 type MyPrefabData = (
     Option<BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)>>,
     Option<AnimationSetPrefab<AnimationId, Transform>>,
+    Option<AnimationSetPrefab<AnimationId, Light>>,
 );
 
 #[derive(Eq, PartialOrd, PartialEq, Hash, Debug, Copy, Clone, Deserialize, Serialize)]
@@ -147,45 +149,6 @@ impl SimpleState for ExampleState {
                 .with(prefab_handle)
                 .build(),
         );
-
-        {
-            let (animation_set, animation) = {
-                let loader = world.read_resource::<Loader>();
-
-                let sampler = loader.load_from_data(
-                    Sampler {
-                        input: vec![0., 1.],
-                        output: vec![
-                            SamplerPrimitive::Vec3([0., 0., 0.]),
-                            SamplerPrimitive::Vec3([0., 1., 0.]),
-                        ],
-                        function: InterpolationFunction::Step,
-                    },
-                    (),
-                    &world.read_resource(),
-                );
-
-                let animation = loader.load_from_data(
-                    Animation::new_single(0, TransformChannel::Translation, sampler),
-                    (),
-                    &world.read_resource(),
-                );
-                let mut animation_set: AnimationSet<AnimationId, Transform> = AnimationSet::new();
-                animation_set.insert(AnimationId::Test, animation.clone());
-                (animation_set, animation)
-            };
-
-            let entity = world.create_entity().with(animation_set).build();
-            let mut storage = world.write_storage::<AnimationControlSet<AnimationId, Transform>>();
-            let control_set = get_animation_set(&mut storage, entity).unwrap();
-            control_set.add_animation(
-                AnimationId::Test,
-                &animation,
-                EndControl::Loop(None),
-                1.0,
-                AnimationCommand::Start,
-            );
-        }
     }
     fn handle_event(
         &mut self,
@@ -220,28 +183,9 @@ impl SimpleState for ExampleState {
                     false,
                 );
             }
-            //  else if is_key_down(&event, VirtualKeyCode::P) {
-            //     self.display_loaded_entities(world);
-            // }
         }
 
-        // println!("LightMode: {:?}", *light_mode);
         Trans::None
-        // match &event {
-        //     // Using the Mouse Wheel to control the scale
-        //     StateEvent::Input(input) => {
-        //         if let InputEvent::MouseWheelMoved(dir) = input {
-        //             let mut scale = world.write_resource::<CustomUniformArgs>();
-        //             match dir {
-        //                 ScrollDirection::ScrollUp => (*scale).scale *= 1.1,
-        //                 ScrollDirection::ScrollDown => (*scale).scale /= 1.1,
-        //                 _ => {}
-        //             }
-        //         }
-        //         Trans::None
-        //     }
-        //     _ => Trans::None,
-        // }
     }
 }
 
@@ -260,6 +204,14 @@ fn main() -> Result<(), Error> {
         .with(AutoFovSystem::default(), "auto_fov", &[])
         .with_system_desc(PrefabLoaderSystemDesc::<MyPrefabData>::default(), "", &[])
         // .with_system_desc(quad::DiscoSystemDesc::default(), "disco_system", &[])
+        .with_bundle(AnimationBundle::<AnimationId, Transform>::new(
+            "animation_control_system",
+            "sampler_interpolation_system",
+        ))?
+        .with_bundle(AnimationBundle::<AnimationId, Light>::new(
+            "light_animation_control_system",
+            "light_sampler_interpolation_system",
+        ))?
         .with(
             // FIXME: create pausable system from SystemDesc?
             systems::RandomFlashingEmitSystem {}.pausable(LightMode::RandomFlashing),
@@ -279,7 +231,7 @@ fn main() -> Result<(), Error> {
         .with(
             light::ApplyRendyLightsSystem {}.pausable(LightMode::RendyLightSources),
             "apply_rendy_lights_system",
-            &[],
+            &["light_sampler_interpolation_system"],
         )
         .with(
             systems::ApplyDiffuseColorSystem::default(),
@@ -311,10 +263,6 @@ fn main() -> Result<(), Error> {
             .with_sensitivity(0.1, 0.1)
             .with_speed(10.0),
         )?
-        .with_bundle(AnimationBundle::<AnimationId, Transform>::new(
-            "animation_control_system",
-            "sampler_interpolation_system",
-        ))?
         .with_bundle(
             TransformBundle::new().with_dep(&["fly_movement", "sampler_interpolation_system"]),
         )?

@@ -19,9 +19,8 @@ impl AnimationSampling for Light {
     type Channel = LightChannel;
 
     fn apply_sample(&mut self, channel: &Self::Channel, data: &SamplerPrimitive<f32>, _: &()) {
-        use crate::util::SamplerPrimitive::*;
-
         use self::LightChannel::*;
+        use crate::util::SamplerPrimitive::*;
         match self {
             Light::Point(point_light) => match (channel, *data) {
                 (&Color, Vec3(ref d)) => {

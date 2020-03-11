@@ -71,10 +71,9 @@ impl<'a> System<'a> for ApplyRendyLightsSystem {
                 // FIXME: this is broken, and much too complicated for just getting the light's global translation...
                 let pos = transform.global_view_matrix().try_inverse().unwrap()
                     * Vec4::new(0.0, 0.0, 0.0, 1.0);
-                println!("transform: {:?}", transform);
+                // println!("transform: {:?}", transform);
                 let pos = Point3::from_homogeneous(pos).unwrap();
-                println!("pos: {:?}", pos);
-
+                // println!("pos: {:?}", pos);
                 rad_scene.apply_light(
                     &planes,
                     &blockmap,
