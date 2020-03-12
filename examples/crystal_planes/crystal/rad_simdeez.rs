@@ -252,9 +252,10 @@ impl Scene {
         pos: &Point3,
         color: &Vec3,
     ) {
-        let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32);
+        // scale up light pos (each plane is only 0.25 * 0.25 in world space)
+        let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32) * 4;
         for (i, plane) in planes.planes_iter().enumerate() {
-            let trace_pos = plane.cell + plane.dir.get_normal();
+            let trace_pos = (plane.cell + plane.dir.get_normal()); // s
 
             let d = (pos - Point3::new(trace_pos.x as f32, trace_pos.y as f32, trace_pos.z as f32))
                 .normalize();

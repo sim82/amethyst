@@ -314,6 +314,44 @@ fn add_animation(
     //     .unwrap();
     let mut sets = world.write_storage();
     let control_set = get_animation_set::<AnimationId, Transform>(&mut sets, entity).unwrap();
+    match defer.clone() {
+        None => {
+            if toggle_if_exists && control_set.has_animation(id) {
+                control_set.toggle(id);
+            } else {
+                control_set.add_animation(
+                    id,
+                    &animation,
+                    EndControl::Loop(None),
+                    rate,
+                    AnimationCommand::Start,
+                );
+            }
+        }
+
+        Some((defer_id, defer_relation)) => {
+            control_set.add_deferred_animation(
+                id,
+                &animation,
+                EndControl::Normal,
+                rate,
+                AnimationCommand::Start,
+                defer_id,
+                defer_relation,
+            );
+        }
+    }
+
+    let mut sets = world.write_storage();
+    let anim_set_storage = world.read_storage::<AnimationSet<AnimationId, Light>>();
+    let anim_set = anim_set_storage.get(entity);
+    println!("anim_set: {:?}", anim_set);
+    let animation = anim_set
+        .expect("missing AnimationSet")
+        .get(&id)
+        .cloned()
+        .unwrap();
+    let control_set = get_animation_set::<AnimationId, Light>(&mut sets, entity).unwrap();
     match defer {
         None => {
             if toggle_if_exists && control_set.has_animation(id) {
