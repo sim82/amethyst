@@ -13,18 +13,22 @@ use amethyst::core::ecs::{Join, ReadExpect, System, SystemData, Write, WriteExpe
 use amethyst_derive::SystemDesc;
 use rand::Rng; //prelude::*;
 
+use std::sync::Arc;
+use std::time::Instant;
+
 #[derive(SystemDesc)]
 #[system_desc(name(RandomFlashingEmitSystemDesc))]
 pub struct RandomFlashingEmitSystem;
 impl<'a> System<'a> for RandomFlashingEmitSystem {
-    type SystemData = WriteExpect<'a, Scene>;
+    type SystemData = WriteExpect<'a, Arc<Scene>>;
 
-    fn run(&mut self, mut rad_scene: Self::SystemData) {
+    fn run(&mut self, rad_scene: Self::SystemData) {
         let mut rand = rand::thread_rng();
         use random_color::{Luminosity, RandomColor};
         let mut rc = RandomColor::new();
         rc.luminosity(Luminosity::Bright);
-        for emit in &mut rad_scene.emit {
+        let mut frontend = rad_scene.lock_frontend();
+        for emit in &mut frontend.emit {
             let color = if rand.gen_bool(0.1) {
                 rc.to_rgb_array()
             } else {
@@ -41,7 +45,7 @@ impl<'a> System<'a> for RandomFlashingEmitSystem {
 #[system_desc(name(TronEmitSystemDesc))]
 pub struct TronEmitSystem;
 impl<'a> System<'a> for TronEmitSystem {
-    type SystemData = WriteExpect<'a, Scene>;
+    type SystemData = WriteExpect<'a, Arc<Scene>>;
 
     fn run(&mut self, mut rad_scene: Self::SystemData) {
         let mut rand = rand::thread_rng();
@@ -53,7 +57,8 @@ impl<'a> System<'a> for TronEmitSystem {
         } else {
             [0; 3]
         };
-        for emit in &mut rad_scene.emit {
+        let mut frontend = rad_scene.lock_frontend();
+        for emit in &mut frontend.emit {
             emit[0] = color[0] as f32 / 255.0;
             emit[1] = color[1] as f32 / 255.0;
             emit[2] = color[2] as f32 / 255.0;
@@ -65,10 +70,12 @@ impl<'a> System<'a> for TronEmitSystem {
 #[system_desc(name(RunRadSceneSystemDesc))]
 pub struct RunRadSceneSystem;
 impl<'a> System<'a> for RunRadSceneSystem {
-    type SystemData = WriteExpect<'a, Scene>;
+    type SystemData = WriteExpect<'a, Arc<Scene>>;
 
     fn run(&mut self, mut rad_scene: Self::SystemData) {
-        rad_scene.do_rad();
+        // noop: rad runs in background
+        // let _pt = crystal::ProfTimer::new("rad scene");
+        // rad_scene.do_rad();
     }
 }
 
@@ -78,16 +85,18 @@ pub struct CopyRadFrontSystem;
 impl<'a> System<'a> for CopyRadFrontSystem {
     type SystemData = (
         WriteStorage<'a, QuadInstance>,
-        ReadExpect<'a, Scene>,
+        ReadExpect<'a, Arc<Scene>>,
         Write<'a, Option<quad::ColorGeneration>>,
     );
 
     fn run(&mut self, (mut quad_instances, rad_scene, mut color_generation): Self::SystemData) {
+        let _pt = crystal::ProfTimer::new("copy rad");
+        let frontend = rad_scene.lock_frontend();
         for q in (&mut quad_instances).join() {
-            if (q.index as usize) < rad_scene.rad_front.r.len() {
-                q.color[0] = rad_scene.rad_front.r[q.index as usize];
-                q.color[1] = rad_scene.rad_front.g[q.index as usize];
-                q.color[2] = rad_scene.rad_front.b[q.index as usize];
+            if (q.index as usize) < frontend.output.r.len() {
+                q.color[0] = frontend.output.r[q.index as usize];
+                q.color[1] = frontend.output.g[q.index as usize];
+                q.color[2] = frontend.output.b[q.index as usize];
             }
         }
         if let Some(ref mut color_generation) = *color_generation {
@@ -107,7 +116,7 @@ impl Default for ApplyDiffuseColorSystem {
     }
 }
 impl<'a> System<'a> for ApplyDiffuseColorSystem {
-    type SystemData = (WriteExpect<'a, PlanesSep>, WriteExpect<'a, Scene>);
+    type SystemData = (WriteExpect<'a, PlanesSep>, WriteExpect<'a, Arc<Scene>>);
 
     fn run(&mut self, (mut planes, mut scene): Self::SystemData) {
         if self.up_to_date {
@@ -120,7 +129,8 @@ impl<'a> System<'a> for ApplyDiffuseColorSystem {
             if ((plane.cell.y) / 2) % 2 == 1 {
                 continue;
             }
-            scene.diffuse[i] = match plane.dir {
+            let mut frontend = scene.lock_frontend();
+            frontend.diffuse[i] = match plane.dir {
                 crystal::Dir::XyPos => color1,
                 crystal::Dir::XyNeg => color2,
                 crystal::Dir::YzPos | crystal::Dir::YzNeg => Vec3::new(0.8f32, 0.8f32, 0.8f32),

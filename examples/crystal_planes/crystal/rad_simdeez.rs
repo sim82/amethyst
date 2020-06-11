@@ -1,6 +1,6 @@
 use super::{ffs, util, PlanesSep};
 #[allow(unused_imports)]
-use super::{Bitmap, BlockMap, DisplayWrap};
+use super::{Bitmap, BlockMap, DisplayWrap, RadFrontend};
 use crate::math::prelude::*;
 use amethyst::core::{
     ecs::{ReadExpect, SystemData, World},
@@ -8,7 +8,10 @@ use amethyst::core::{
 };
 use rayon::prelude::*;
 use simdeez::{avx2::Avx2, sse2::Sse2, Simd};
+use std::sync::Mutex;
 use std::time::Instant;
+
+#[derive(Clone)]
 pub struct RadBuffer {
     pub r: Vec<f32>,
     pub g: Vec<f32>,
@@ -172,7 +175,7 @@ impl Blocklist {
     }
 }
 
-pub struct Scene {
+pub struct InternalData {
     pub emit: Vec<Vec3>,
     pub blocks: Vec<Blocklist>,
     pub extents: Vec<Vec<ffs::Extent>>,
@@ -180,6 +183,11 @@ pub struct Scene {
     pub rad_back: RadBuffer,
     pub diffuse: Vec<Vec3>,
     pub pints: usize,
+}
+
+pub struct Scene {
+    pub internal: Mutex<InternalData>,
+    pub frontend: Mutex<RadFrontend>,
 }
 
 fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
@@ -226,21 +234,29 @@ impl Scene {
         );
 
         Scene {
-            emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
-            // rad_front: vec![Vec3::zero(); planes.num_planes()],
-            // rad_back: vec![Vec3::zero(); planes.num_planes()],
-            rad_front: RadBuffer::new(planes.num_planes()),
-            rad_back: RadBuffer::new(planes.num_planes()),
-            blocks: blocks,
-            extents: extents,
-            //ff: formfactors,
-            diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
-            pints: 0,
+            internal: Mutex::new(InternalData {
+                emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
+                // rad_front: vec![Vec3::zero(); planes.num_planes()],
+                // rad_back: vec![Vec3::zero(); planes.num_planes()],
+                rad_front: RadBuffer::new(planes.num_planes()),
+                rad_back: RadBuffer::new(planes.num_planes()),
+                blocks: blocks,
+                extents: extents,
+                //ff: formfactors,
+                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
+                pints: 0,
+            }),
+            frontend: Mutex::new(RadFrontend {
+                emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
+                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
+                output: RadBuffer::new(planes.num_planes()),
+            }),
         }
     }
 
     pub fn clear_emit(&mut self) {
-        for v in self.emit.iter_mut() {
+        let mut internal = self.internal.lock().expect("rad internal lock failed");
+        for v in internal.emit.iter_mut() {
             *v = Vec3::new(0.0, 0.0, 0.0);
         }
     }
@@ -252,6 +268,7 @@ impl Scene {
         pos: &Point3,
         color: &Vec3,
     ) {
+        let mut internal = self.internal.lock().expect("rad internal lock failed");
         // scale up light pos (each plane is only 0.25 * 0.25 in world space)
         let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32) * 4;
         for (i, plane) in planes.planes_iter().enumerate() {
@@ -266,60 +283,74 @@ impl Scene {
             let dot = math::Matrix::dot(&d, &plane.dir.get_normal());
 
             //self.emit[i] = Vec3::zero(); //new(0.2, 0.2, 0.2);
-            let diff_color = self.diffuse[i];
+            let diff_color = internal.diffuse[i];
             if !util::occluded(light_pos, trace_pos, &*bitmap) && dot > 0f32 {
                 // println!("light");
-                self.emit[i] +=
+                internal.emit[i] +=
                     vec_mul(&diff_color, &color) * dot * (5f32 / (2f32 * 3.1415f32 * len * len));
             }
         }
     }
 
-    pub fn do_rad(&mut self) {
+    pub fn do_rad(&self) {
         self.do_rad_blocks();
         //self.do_rad_extents();
     }
     #[allow(unused)]
-    pub fn do_rad_extents(&mut self) {
-        std::mem::swap(&mut self.rad_front, &mut self.rad_back);
+    pub fn do_rad_extents(&self) {
+        let mut internal = self.internal.lock().expect("rad internal lock failed");
+        let internal = &mut (*internal);
+        std::mem::swap(&mut internal.rad_front, &mut internal.rad_back);
 
-        for (i, extents) in self.extents.iter().enumerate() {
+        for (i, extents) in internal.extents.iter().enumerate() {
             let mut rad_r = 0f32;
             let mut rad_g = 0f32;
             let mut rad_b = 0f32;
-            let diffuse = self.diffuse[i as usize];
+            let diffuse = internal.diffuse[i as usize];
 
-            let RadBuffer { r, g, b } = &self.rad_back;
+            let RadBuffer { r, g, b } = &internal.rad_back;
             for ffs::Extent { start, ffs } in extents {
                 for (j, ff) in ffs.iter().enumerate() {
                     rad_r += r[j + *start as usize] * diffuse.x * *ff;
                     rad_g += g[j + *start as usize] * diffuse.y * *ff;
                     rad_b += b[j + *start as usize] * diffuse.z * *ff;
                 }
-                self.pints += ffs.len();
+                internal.pints += ffs.len();
             }
 
-            self.rad_front.r[i as usize] = self.emit[i as usize].x + rad_r;
-            self.rad_front.g[i as usize] = self.emit[i as usize].y + rad_g;
-            self.rad_front.b[i as usize] = self.emit[i as usize].z + rad_b;
+            internal.rad_front.r[i as usize] = internal.emit[i as usize].x + rad_r;
+            internal.rad_front.g[i as usize] = internal.emit[i as usize].y + rad_g;
+            internal.rad_front.b[i as usize] = internal.emit[i as usize].z + rad_b;
         }
     }
 
-    pub fn do_rad_blocks(&mut self) {
-        // let start = Instant::now();
+    pub fn do_rad_blocks(&self) {
+        let mut internal = self.internal.lock().expect("rad internal lock failed");
+        let internal = &mut (*internal);
 
-        std::mem::swap(&mut self.rad_front, &mut self.rad_back);
+        {
+            // let _pt = super::ProfTimer::new("congestion");
+            let mut frontend = self.frontend.lock().expect("rad frontend lock failed");
+
+            frontend.output = internal.rad_back.clone();
+            internal.emit = frontend.emit.clone();
+            internal.diffuse = frontend.diffuse.clone();
+        }
+        // frontend.drop();
+        // let start = Instant::now();
+        std::mem::swap(&mut internal.rad_front, &mut internal.rad_back);
+
         // self.rad_front.copy
 
-        assert!(self.rad_front.r.len() == self.blocks.len());
+        assert!(internal.rad_front.r.len() == internal.blocks.len());
         let mut front = RadBuffer::new(0);
-        std::mem::swap(&mut self.rad_front, &mut front);
+        std::mem::swap(&mut internal.rad_front, &mut front);
 
         let num_chunks = 32;
-        let chunk_size = self.blocks.len() / num_chunks;
-        let blocks_split = self.blocks.chunks(chunk_size).collect::<Vec<_>>();
-        let emit_split = self.emit.chunks(chunk_size).collect::<Vec<_>>();
-        let diffuse_split = self.diffuse.chunks(chunk_size).collect::<Vec<_>>();
+        let chunk_size = internal.blocks.len() / num_chunks;
+        let blocks_split = internal.blocks.chunks(chunk_size).collect::<Vec<_>>();
+        let emit_split = internal.emit.chunks(chunk_size).collect::<Vec<_>>();
+        let diffuse_split = internal.diffuse.chunks(chunk_size).collect::<Vec<_>>();
 
         let (r_split, g_split, b_split) = front.chunks_mut2(chunk_size);
         let mut tmp = itertools::izip!(
@@ -333,29 +364,44 @@ impl Scene {
         )
         .collect::<Vec<_>>();
 
-        self.pints += tmp
+        internal.pints += tmp
             .par_iter_mut()
             // .iter_mut()
             .map(|(ref mut r, ref mut g, ref mut b, blocks, emit, diffuse)| {
-                RadWorkblockSimd::new(self.rad_back.slice_full(), (r, g, b), blocks, emit, diffuse)
-                    .do_iter()
+                RadWorkblockSimd::new(
+                    internal.rad_back.slice_full(),
+                    (r, g, b),
+                    blocks,
+                    emit,
+                    diffuse,
+                )
+                .do_iter()
             })
             .sum::<usize>();
 
-        std::mem::swap(&mut self.rad_front, &mut front);
+        std::mem::swap(&mut internal.rad_front, &mut front);
     }
     #[allow(unused)]
     pub fn print_stat(&self) {
+        let internal = self.internal.lock().expect("rad internal lock failed");
         // println!("write blocks");
 
         // for blocklist in &self.blocks {
         //     blocklist.print_stat();
         // }
 
-        let ff_size: usize = self.blocks.iter().map(|x| x.num_formfactors() * 4).sum();
-        let color_size = self.rad_front.r.len() * 3 * 4 * 2;
+        let ff_size: usize = internal
+            .blocks
+            .iter()
+            .map(|x| x.num_formfactors() * 4)
+            .sum();
+        let color_size = internal.rad_front.r.len() * 3 * 4 * 2;
 
         println!("working set:\nff: {}\ncolor: {}", ff_size, color_size);
+    }
+
+    pub fn lock_frontend(&self) -> std::sync::MutexGuard<'_, RadFrontend> {
+        self.frontend.lock().expect("rad frontend lock failed")
     }
 }
 

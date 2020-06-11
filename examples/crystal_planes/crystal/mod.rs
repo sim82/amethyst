@@ -506,19 +506,74 @@ pub fn read_map<P: AsRef<Path>>(filename: P) -> std::io::Result<BlockMap> {
 // simple profiling timer, e.g. to get an idea what is running when on which thread
 
 pub struct ProfTimer {
-    name : String,
-    start : std::time::Instant,
+    name: String,
+    start: std::time::Instant,
 }
 
 impl ProfTimer {
-    pub fn new( name : &str ) -> Self {
-        ProfTimer { name : name.into(), start: std::time::Instant::now() }
+    pub fn new(name: &str) -> Self {
+        ProfTimer {
+            name: name.into(),
+            start: std::time::Instant::now(),
+        }
     }
 }
 
 impl Drop for ProfTimer {
     fn drop(&mut self) {
-        println!( "pt: {} {:?} {:?}", self.name, std::thread::current().id(), self.start.elapsed());
+        println!(
+            "pt: {} {:?} {:?}",
+            self.name,
+            std::thread::current().id(),
+            self.start.elapsed()
+        );
+    }
+}
+
+pub struct RadFrontend {
+    pub emit: Vec<Vec3>,
+    pub diffuse: Vec<Vec3>,
+    pub output: rads::RadBuffer,
+}
+
+fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
+    Vec3::new(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z)
+}
+
+impl RadFrontend {
+    pub fn clear_emit(&mut self) {
+        for v in self.emit.iter_mut() {
+            *v = Vec3::new(0.0, 0.0, 0.0);
+        }
     }
 
+    pub fn apply_light(
+        &mut self,
+        planes: &PlanesSep,
+        bitmap: &BlockMap,
+        pos: &Point3,
+        color: &Vec3,
+    ) {
+        // scale up light pos (each plane is only 0.25 * 0.25 in world space)
+        let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32) * 4;
+        for (i, plane) in planes.planes_iter().enumerate() {
+            let trace_pos = (plane.cell + plane.dir.get_normal()); // s
+
+            let d = (pos - Point3::new(trace_pos.x as f32, trace_pos.y as f32, trace_pos.z as f32))
+                .normalize();
+
+            // normalize: make directional light
+            let len = d.magnitude();
+            // d /= len;
+            let dot = math::Matrix::dot(&d, &plane.dir.get_normal());
+
+            //self.emit[i] = Vec3::zero(); //new(0.2, 0.2, 0.2);
+            let diff_color = self.diffuse[i];
+            if !util::occluded(light_pos, trace_pos, &*bitmap) && dot > 0f32 {
+                // println!("light");
+                self.emit[i] +=
+                    vec_mul(&diff_color, &color) * dot * (5f32 / (2f32 * 3.1415f32 * len * len));
+            }
+        }
+    }
 }

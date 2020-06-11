@@ -14,6 +14,7 @@ use amethyst::{
     renderer::light::Light,
 };
 use amethyst_derive::SystemDesc;
+use std::sync::Arc;
 
 pub struct PointLight {
     pos: Point3<f32>,
@@ -38,16 +39,17 @@ impl Component for PointLight {
 pub struct ApplyLightsSystem;
 impl<'a> System<'a> for ApplyLightsSystem {
     type SystemData = (
-        WriteExpect<'a, Scene>,
+        WriteExpect<'a, Arc<Scene>>,
         ReadExpect<'a, PlanesSep>,
         ReadExpect<'a, BlockMap>,
         ReadStorage<'a, PointLight>,
     );
 
     fn run(&mut self, (mut rad_scene, planes, blockmap, point_lights): Self::SystemData) {
-        rad_scene.clear_emit();
+        let mut frontend = rad_scene.lock_frontend();
+        frontend.clear_emit();
         for light in point_lights.join() {
-            rad_scene.apply_light(&planes, &blockmap, &light.pos, &light.color);
+            frontend.apply_light(&planes, &blockmap, &light.pos, &light.color);
         }
     }
 }
@@ -57,7 +59,7 @@ impl<'a> System<'a> for ApplyLightsSystem {
 pub struct ApplyRendyLightsSystem;
 impl<'a> System<'a> for ApplyRendyLightsSystem {
     type SystemData = (
-        WriteExpect<'a, Scene>,
+        WriteExpect<'a, Arc<Scene>>,
         ReadExpect<'a, PlanesSep>,
         ReadExpect<'a, BlockMap>,
         ReadStorage<'a, Light>,
@@ -65,7 +67,8 @@ impl<'a> System<'a> for ApplyRendyLightsSystem {
     );
 
     fn run(&mut self, (mut rad_scene, planes, blockmap, light, transform): Self::SystemData) {
-        rad_scene.clear_emit();
+        let mut frontend = rad_scene.lock_frontend();
+        frontend.clear_emit();
         for (light, transform) in (&light, &transform).join() {
             if let Light::Point(point_light) = light {
                 // FIXME: this is broken, and much too complicated for just getting the light's global translation...
@@ -74,7 +77,7 @@ impl<'a> System<'a> for ApplyRendyLightsSystem {
                 // println!("transform: {:?}", transform);
                 let pos = Point3::from_homogeneous(pos).unwrap();
                 // println!("pos: {:?}", pos);
-                rad_scene.apply_light(
+                frontend.apply_light(
                     &planes,
                     &blockmap,
                     &pos,
