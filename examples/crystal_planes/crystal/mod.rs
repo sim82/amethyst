@@ -502,3 +502,23 @@ pub fn read_map<P: AsRef<Path>>(filename: P) -> std::io::Result<BlockMap> {
     bm.add(&slice);
     Ok(bm)
 }
+
+// simple profiling timer, e.g. to get an idea what is running when on which thread
+
+pub struct ProfTimer {
+    name : String,
+    start : std::time::Instant,
+}
+
+impl ProfTimer {
+    pub fn new( name : &str ) -> Self {
+        ProfTimer { name : name.into(), start: std::time::Instant::now() }
+    }
+}
+
+impl Drop for ProfTimer {
+    fn drop(&mut self) {
+        println!( "pt: {} {:?} {:?}", self.name, std::thread::current().id(), self.start.elapsed());
+    }
+
+}
