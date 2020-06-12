@@ -5,7 +5,7 @@ pub mod ffs;
 // mod rad_expv;
 // mod rad_impv;
 // mod rad_par;
-// mod rad_ref;
+mod rad_ref;
 mod rad_simdeez;
 use amethyst::core::{
     ecs::{Component, DenseVecStorage},
@@ -14,6 +14,7 @@ use amethyst::core::{
 };
 // mod rad_stdsimd;
 pub mod rads {
+    // pub use super::rad_ref::*;
     // pub use super::rad_stdsimd::*;
     // pub use super::rad_impv::*;
     // pub use super::rad_par::*;
