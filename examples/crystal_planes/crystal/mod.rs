@@ -4,7 +4,7 @@ pub mod ffs;
 
 // mod rad_expv;
 // mod rad_impv;
-// mod rad_par;
+mod rad_par;
 mod rad_ref;
 mod rad_simdeez;
 use amethyst::core::{
