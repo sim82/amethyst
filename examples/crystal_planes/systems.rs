@@ -90,7 +90,7 @@ impl<'a> System<'a> for CopyRadFrontSystem {
     );
 
     fn run(&mut self, (mut quad_instances, rad_scene, mut color_generation): Self::SystemData) {
-        let _pt = crystal::ProfTimer::new("copy rad");
+        // let _pt = crystal::ProfTimer::new("copy rad");
         let frontend = rad_scene.lock_frontend();
         for q in (&mut quad_instances).join() {
             if (q.index as usize) < frontend.output.r.len() {

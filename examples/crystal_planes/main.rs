@@ -123,7 +123,7 @@ impl SimpleState for MapLoadState {
 
         std::thread::spawn(move || {
             while (true) {
-                let _pt = crystal::ProfTimer::new("rad update");
+                // let _pt = crystal::ProfTimer::new("rad update");
                 rad_scene.do_rad();
             }
         });

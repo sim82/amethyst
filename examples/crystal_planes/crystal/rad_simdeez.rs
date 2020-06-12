@@ -182,12 +182,17 @@ pub struct InternalData {
     pub rad_front: RadBuffer,
     pub rad_back: RadBuffer,
     pub diffuse: Vec<Vec3>,
-    pub pints: usize,
+}
+
+pub struct Stat {
+    pints: usize,
+    last_stat: Option<std::time::Instant>,
 }
 
 pub struct Scene {
     pub internal: Mutex<InternalData>,
     pub frontend: Mutex<RadFrontend>,
+    pub stat: Mutex<Stat>,
 }
 
 fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
@@ -244,12 +249,15 @@ impl Scene {
                 extents: extents,
                 //ff: formfactors,
                 diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
-                pints: 0,
             }),
             frontend: Mutex::new(RadFrontend {
                 emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
                 diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
                 output: RadBuffer::new(planes.num_planes()),
+            }),
+            stat: Mutex::new(Stat {
+                pints: 0,
+                last_stat: None,
             }),
         }
     }
@@ -293,7 +301,28 @@ impl Scene {
     }
 
     pub fn do_rad(&self) {
-        self.do_rad_blocks();
+        let pints = self.do_rad_blocks();
+
+        if let Ok(ref mut stat) = self.stat.lock() {
+            stat.pints += pints;
+            let mut new_time = false;
+            if let Some(time) = stat.last_stat {
+                let elapsed = time.elapsed();
+                if elapsed >= std::time::Duration::from_secs(1) {
+                    let ps = stat.pints as f64 / elapsed.as_secs_f64();
+                    println!("pint/s: {}", ps);
+                    new_time = true;
+                    stat.pints = 0;
+                }
+            } else {
+                new_time = true;
+            }
+
+            if new_time {
+                stat.last_stat = Some(std::time::Instant::now());
+            }
+        }
+
         //self.do_rad_extents();
     }
     #[allow(unused)]
@@ -315,7 +344,6 @@ impl Scene {
                     rad_g += g[j + *start as usize] * diffuse.y * *ff;
                     rad_b += b[j + *start as usize] * diffuse.z * *ff;
                 }
-                internal.pints += ffs.len();
             }
 
             internal.rad_front.r[i as usize] = internal.emit[i as usize].x + rad_r;
@@ -324,7 +352,7 @@ impl Scene {
         }
     }
 
-    pub fn do_rad_blocks(&self) {
+    pub fn do_rad_blocks(&self) -> usize {
         let mut internal = self.internal.lock().expect("rad internal lock failed");
         let internal = &mut (*internal);
 
@@ -364,7 +392,7 @@ impl Scene {
         )
         .collect::<Vec<_>>();
 
-        internal.pints += tmp
+        let pints = tmp
             .par_iter_mut()
             // .iter_mut()
             .map(|(ref mut r, ref mut g, ref mut b, blocks, emit, diffuse)| {
@@ -380,6 +408,8 @@ impl Scene {
             .sum::<usize>();
 
         std::mem::swap(&mut internal.rad_front, &mut front);
+
+        pints
     }
     #[allow(unused)]
     pub fn print_stat(&self) {
@@ -464,14 +494,13 @@ impl RadWorkblockSimd<'_> {
                 for (j, ff) in ff_i.vec4.iter().zip(&ff_i.vec4_ff) {
                     // unsafe {
                     let j = *j as usize;
-                    let ff = *ff;
                     let vr = V::load_ps(&r.get_unchecked(j));
                     let vg = V::load_ps(&g.get_unchecked(j));
                     let vb = V::load_ps(&b.get_unchecked(j));
 
-                    vsum_r += vdiffuse_r * ff * vr;
-                    vsum_g += vdiffuse_g * ff * vg;
-                    vsum_b += vdiffuse_b * ff * vb;
+                    vsum_r += vdiffuse_r * *ff * vr;
+                    vsum_g += vdiffuse_g * *ff * vg;
+                    vsum_b += vdiffuse_b * *ff * vb;
                 }
                 V::store_ps(&mut self.vtmp[0], vsum_r);
                 rad_r += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
@@ -495,14 +524,13 @@ impl RadWorkblockSimd<'_> {
                 for (j, ff) in ff_i.vec8.iter().zip(&ff_i.vec8_ff) {
                     // unsafe {
                     let j = *j as usize;
-                    let ff = *ff;
                     let vr = V::load_ps(&r.get_unchecked(j));
                     let vg = V::load_ps(&g.get_unchecked(j));
                     let vb = V::load_ps(&b.get_unchecked(j));
 
-                    vsum_r += vdiffuse_r * ff * vr;
-                    vsum_g += vdiffuse_g * ff * vg;
-                    vsum_b += vdiffuse_b * ff * vb;
+                    vsum_r += vdiffuse_r * *ff * vr;
+                    vsum_g += vdiffuse_g * *ff * vg;
+                    vsum_b += vdiffuse_b * *ff * vb;
                 }
                 V::store_ps(&mut self.vtmp[0], vsum_r);
                 rad_r += self.vtmp.iter().take(V::VF32_WIDTH).sum::<f32>();
