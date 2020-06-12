@@ -1,6 +1,9 @@
-use super::{ffs, util, PlanesSep};
 #[allow(unused_imports)]
-use super::{Bitmap, BlockMap, DisplayWrap, RadFrontend};
+use super::{
+    aligned_vector_init, Bitmap, BlockMap, DisplayWrap, MutRadSlice, RadBuffer, RadFrontend,
+    RadSlice,
+};
+use super::{ffs, ffs::Extent, util, PlanesSep};
 use crate::math::prelude::*;
 use amethyst::core::{
     ecs::{ReadExpect, SystemData, World},
@@ -11,100 +14,10 @@ use simdeez::{avx2::Avx2, sse2::Sse2, Simd};
 use std::sync::Mutex;
 use std::time::Instant;
 
-#[derive(Clone)]
-pub struct RadBuffer {
-    pub r: Vec<f32>,
-    pub g: Vec<f32>,
-    pub b: Vec<f32>,
-}
-type RadSlice<'a> = (&'a [f32], &'a [f32], &'a [f32]);
-type MutRadSlice<'a> = (&'a mut [f32], &'a mut [f32], &'a mut [f32]);
-
-pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
-    let t_size = std::mem::size_of::<T>();
-    let t_align = std::mem::align_of::<T>();
-    let layout = if t_align >= align {
-        std::alloc::Layout::from_size_align(t_size * len, t_align).unwrap()
-    } else {
-        std::alloc::Layout::from_size_align(t_size * len, align).unwrap()
-    };
-    unsafe {
-        let mem = std::alloc::alloc(layout);
-        assert_eq!((mem as usize) % 16, 0);
-        Vec::<T>::from_raw_parts(mem as *mut T, len, len)
-    }
-}
-
-pub fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
-    let mut v = aligned_vector::<T>(len, align);
-    for x in v.iter_mut() {
-        *x = init;
-    }
-    v
-}
-
-impl RadBuffer {
-    /// Utility for making specifically aligned vectors
-
-    fn new(size: usize) -> RadBuffer {
-        RadBuffer {
-            r: aligned_vector_init(size, 64, 0f32),
-            g: aligned_vector_init(size, 64, 0f32),
-            b: aligned_vector_init(size, 64, 0f32),
-        }
-    }
-
-    #[allow(unused)]
-    pub fn slice(&self, i: std::ops::Range<usize>) -> RadSlice<'_> {
-        (&self.r[i.clone()], &self.g[i.clone()], &self.b[i.clone()])
-    }
-    #[allow(unused)]
-    pub fn slice_mut(&mut self, i: std::ops::Range<usize>) -> MutRadSlice<'_> {
-        (
-            &mut self.r[i.clone()],
-            &mut self.g[i.clone()],
-            &mut self.b[i.clone()],
-        )
-    }
-    // this is a bit redundant, but found no better way since SliceIndex is non-copy and thus cannot be used for indexing multiple Vecs
-    pub fn slice_full(&self) -> RadSlice<'_> {
-        (&self.r[..], &self.g[..], &self.b[..])
-    }
-    #[allow(unused)]
-    pub fn slice_full_mut(&mut self) -> MutRadSlice<'_> {
-        (&mut self.r[..], &mut self.g[..], &mut self.b[..])
-    }
-    #[allow(unused)]
-    pub fn chunks_mut(&mut self, size: usize) -> impl Iterator<Item = MutRadSlice<'_>> {
-        itertools::izip!(
-            self.r.chunks_mut(size),
-            self.g.chunks_mut(size),
-            self.b.chunks_mut(size)
-        )
-    }
-
-    fn chunks_mut2(
-        &mut self,
-        size: usize,
-    ) -> (
-        impl Iterator<Item = &mut [f32]>,
-        impl Iterator<Item = &mut [f32]>,
-        impl Iterator<Item = &mut [f32]>,
-    ) {
-        (
-            self.r.chunks_mut(size),
-            self.g.chunks_mut(size),
-            self.b.chunks_mut(size),
-        )
-    }
-}
-
 pub struct Blocklist {
     single: Vec<(u32, f32)>,
-    // vec2_ff: Vec<f32x2>, // keep simd vectors densely packed
     vec4_ff: Vec<<Sse2 as Simd>::Vf32>,
     vec8_ff: Vec<<Avx2 as Simd>::Vf32>,
-    // vec16_ff: Vec<f32x16>,
     vec2: Vec<u32>,
     vec4: Vec<u32>,
     vec8: Vec<u32>,
@@ -175,7 +88,7 @@ impl Blocklist {
     }
 }
 
-pub struct InternalData {
+pub struct RadBackend {
     pub emit: Vec<Vec3>,
     pub blocks: Vec<Blocklist>,
     pub extents: Vec<Vec<ffs::Extent>>,
@@ -184,43 +97,12 @@ pub struct InternalData {
     pub diffuse: Vec<Vec3>,
 }
 
-pub struct Stat {
-    pints: usize,
-    last_stat: Option<std::time::Instant>,
-}
-
-pub struct Scene {
-    pub internal: Mutex<InternalData>,
-    pub frontend: Mutex<RadFrontend>,
-    pub stat: Mutex<Stat>,
-}
-
-fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
-    Vec3::new(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z)
-}
-
-impl Scene {
-    pub fn new(world: &World) -> Self {
-        let (planes, bitmap) = <(ReadExpect<PlanesSep>, ReadExpect<BlockMap>)>::fetch(world);
-
-        let filename = "extents.bin";
-
-        let extents = if let Some(extents) = ffs::load_extents(filename) {
-            extents
-        } else {
-            let formfactors = ffs::split_formfactors(ffs::setup_formfactors(&*planes, &*bitmap));
-            let extents = ffs::to_extents(&formfactors);
-            ffs::write_extents(filename, &extents);
-            println!("wrote {}", filename);
-            extents
-        };
-
-        let start = Instant::now();
+impl RadBackend {
+    pub fn new(extents: Vec<Vec<Extent>>) -> Self {
         let blocks = extents
             .iter()
             .map(|x| Blocklist::from_extents(x))
             .collect::<Vec<_>>();
-        println!("blocks done: {:?}", start.elapsed());
         let sizes = blocks
             .iter()
             .map(|x| x.get_sizes())
@@ -238,147 +120,43 @@ impl Scene {
             sizes.2 as f32 / size_all
         );
 
-        Scene {
-            internal: Mutex::new(InternalData {
-                emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
-                // rad_front: vec![Vec3::zero(); planes.num_planes()],
-                // rad_back: vec![Vec3::zero(); planes.num_planes()],
-                rad_front: RadBuffer::new(planes.num_planes()),
-                rad_back: RadBuffer::new(planes.num_planes()),
-                blocks: blocks,
-                extents: extents,
-                //ff: formfactors,
-                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
-            }),
-            frontend: Mutex::new(RadFrontend {
-                emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
-                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
-                output: RadBuffer::new(planes.num_planes()),
-            }),
-            stat: Mutex::new(Stat {
-                pints: 0,
-                last_stat: None,
-            }),
+        let num_planes = extents.len();
+        RadBackend {
+            emit: vec![Vec3::new(0.0, 0.0, 0.0); num_planes],
+            // rad_front: vec![Vec3::zero(); planes.num_planes()],
+            // rad_back: vec![Vec3::zero(); planes.num_planes()],
+            rad_front: RadBuffer::new(num_planes),
+            rad_back: RadBuffer::new(num_planes),
+            blocks: blocks,
+            extents: extents,
+            //ff: formfactors,
+            diffuse: vec![Vec3::new(1f32, 1f32, 1f32); num_planes],
         }
     }
 
-    pub fn clear_emit(&mut self) {
-        let mut internal = self.internal.lock().expect("rad internal lock failed");
-        for v in internal.emit.iter_mut() {
-            *v = Vec3::new(0.0, 0.0, 0.0);
-        }
+    pub fn do_rad(&mut self, frontend: &Mutex<RadFrontend>) -> usize {
+        self.do_rad_blocks(frontend)
     }
 
-    pub fn apply_light(
-        &mut self,
-        planes: &PlanesSep,
-        bitmap: &BlockMap,
-        pos: &Point3,
-        color: &Vec3,
-    ) {
-        let mut internal = self.internal.lock().expect("rad internal lock failed");
-        // scale up light pos (each plane is only 0.25 * 0.25 in world space)
-        let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32) * 4;
-        for (i, plane) in planes.planes_iter().enumerate() {
-            let trace_pos = (plane.cell + plane.dir.get_normal()); // s
-
-            let d = (pos - Point3::new(trace_pos.x as f32, trace_pos.y as f32, trace_pos.z as f32))
-                .normalize();
-
-            // normalize: make directional light
-            let len = d.magnitude();
-            // d /= len;
-            let dot = math::Matrix::dot(&d, &plane.dir.get_normal());
-
-            //self.emit[i] = Vec3::zero(); //new(0.2, 0.2, 0.2);
-            let diff_color = internal.diffuse[i];
-            if !util::occluded(light_pos, trace_pos, &*bitmap) && dot > 0f32 {
-                // println!("light");
-                internal.emit[i] +=
-                    vec_mul(&diff_color, &color) * dot * (5f32 / (2f32 * 3.1415f32 * len * len));
-            }
-        }
-    }
-
-    pub fn do_rad(&self) {
-        let pints = self.do_rad_blocks();
-
-        if let Ok(ref mut stat) = self.stat.lock() {
-            stat.pints += pints;
-            let mut new_time = false;
-            if let Some(time) = stat.last_stat {
-                let elapsed = time.elapsed();
-                if elapsed >= std::time::Duration::from_secs(1) {
-                    let ps = stat.pints as f64 / elapsed.as_secs_f64();
-                    println!("pint/s: {}", ps);
-                    new_time = true;
-                    stat.pints = 0;
-                }
-            } else {
-                new_time = true;
-            }
-
-            if new_time {
-                stat.last_stat = Some(std::time::Instant::now());
-            }
-        }
-
-        //self.do_rad_extents();
-    }
-    #[allow(unused)]
-    pub fn do_rad_extents(&self) {
-        let mut internal = self.internal.lock().expect("rad internal lock failed");
-        let internal = &mut (*internal);
-        std::mem::swap(&mut internal.rad_front, &mut internal.rad_back);
-
-        for (i, extents) in internal.extents.iter().enumerate() {
-            let mut rad_r = 0f32;
-            let mut rad_g = 0f32;
-            let mut rad_b = 0f32;
-            let diffuse = internal.diffuse[i as usize];
-
-            let RadBuffer { r, g, b } = &internal.rad_back;
-            for ffs::Extent { start, ffs } in extents {
-                for (j, ff) in ffs.iter().enumerate() {
-                    rad_r += r[j + *start as usize] * diffuse.x * *ff;
-                    rad_g += g[j + *start as usize] * diffuse.y * *ff;
-                    rad_b += b[j + *start as usize] * diffuse.z * *ff;
-                }
-            }
-
-            internal.rad_front.r[i as usize] = internal.emit[i as usize].x + rad_r;
-            internal.rad_front.g[i as usize] = internal.emit[i as usize].y + rad_g;
-            internal.rad_front.b[i as usize] = internal.emit[i as usize].z + rad_b;
-        }
-    }
-
-    pub fn do_rad_blocks(&self) -> usize {
-        let mut internal = self.internal.lock().expect("rad internal lock failed");
-        let internal = &mut (*internal);
-
+    pub fn do_rad_blocks(&mut self, frontend: &Mutex<RadFrontend>) -> usize {
         {
-            // let _pt = super::ProfTimer::new("congestion");
-            let mut frontend = self.frontend.lock().expect("rad frontend lock failed");
+            let mut frontend = frontend.lock().expect("rad frontend lock failed");
 
-            frontend.output = internal.rad_back.clone();
-            internal.emit = frontend.emit.clone();
-            internal.diffuse = frontend.diffuse.clone();
+            frontend.output = self.rad_back.clone();
+            self.emit = frontend.emit.clone();
+            self.diffuse = frontend.diffuse.clone();
         }
-        // frontend.drop();
-        // let start = Instant::now();
-        std::mem::swap(&mut internal.rad_front, &mut internal.rad_back);
+        std::mem::swap(&mut self.rad_front, &mut self.rad_back);
 
-        // self.rad_front.copy
-
-        assert!(internal.rad_front.r.len() == internal.blocks.len());
+        assert!(self.rad_front.r.len() == self.blocks.len());
         let mut front = RadBuffer::new(0);
-        std::mem::swap(&mut internal.rad_front, &mut front);
+        std::mem::swap(&mut self.rad_front, &mut front);
 
         let num_chunks = 32;
-        let chunk_size = internal.blocks.len() / num_chunks;
-        let blocks_split = internal.blocks.chunks(chunk_size).collect::<Vec<_>>();
-        let emit_split = internal.emit.chunks(chunk_size).collect::<Vec<_>>();
-        let diffuse_split = internal.diffuse.chunks(chunk_size).collect::<Vec<_>>();
+        let chunk_size = self.blocks.len() / num_chunks;
+        let blocks_split = self.blocks.chunks(chunk_size).collect::<Vec<_>>();
+        let emit_split = self.emit.chunks(chunk_size).collect::<Vec<_>>();
+        let diffuse_split = self.diffuse.chunks(chunk_size).collect::<Vec<_>>();
 
         let (r_split, g_split, b_split) = front.chunks_mut2(chunk_size);
         let mut tmp = itertools::izip!(
@@ -396,42 +174,28 @@ impl Scene {
             .par_iter_mut()
             // .iter_mut()
             .map(|(ref mut r, ref mut g, ref mut b, blocks, emit, diffuse)| {
-                RadWorkblockSimd::new(
-                    internal.rad_back.slice_full(),
-                    (r, g, b),
-                    blocks,
-                    emit,
-                    diffuse,
-                )
-                .do_iter()
+                RadWorkblockSimd::new(self.rad_back.slice_full(), (r, g, b), blocks, emit, diffuse)
+                    .do_iter()
             })
             .sum::<usize>();
 
-        std::mem::swap(&mut internal.rad_front, &mut front);
+        std::mem::swap(&mut self.rad_front, &mut front);
 
         pints
     }
     #[allow(unused)]
     pub fn print_stat(&self) {
-        let internal = self.internal.lock().expect("rad internal lock failed");
+        // let internal = self.internal.lock().expect("rad internal lock failed");
         // println!("write blocks");
 
         // for blocklist in &self.blocks {
         //     blocklist.print_stat();
         // }
 
-        let ff_size: usize = internal
-            .blocks
-            .iter()
-            .map(|x| x.num_formfactors() * 4)
-            .sum();
-        let color_size = internal.rad_front.r.len() * 3 * 4 * 2;
+        let ff_size: usize = self.blocks.iter().map(|x| x.num_formfactors() * 4).sum();
+        let color_size = self.rad_front.r.len() * 3 * 4 * 2;
 
         println!("working set:\nff: {}\ncolor: {}", ff_size, color_size);
-    }
-
-    pub fn lock_frontend(&self) -> std::sync::MutexGuard<'_, RadFrontend> {
-        self.frontend.lock().expect("rad frontend lock failed")
     }
 }
 

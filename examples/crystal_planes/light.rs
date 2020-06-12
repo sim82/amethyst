@@ -1,5 +1,5 @@
 use crate::{
-    crystal::{rads::Scene, BlockMap, PlanesSep},
+    crystal::{BlockMap, PlanesSep, Scene},
     math::prelude::*,
 };
 use amethyst::{

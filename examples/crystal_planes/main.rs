@@ -118,7 +118,7 @@ impl SimpleState for MapLoadState {
             world.create_entity().with(p).with(quad).build();
         }
         world.insert(planes);
-        let rad_scene = std::sync::Arc::new(crystal::rads::Scene::new(world));
+        let rad_scene = std::sync::Arc::new(crystal::Scene::new(world));
         world.insert(rad_scene.clone());
 
         std::thread::spawn(move || {

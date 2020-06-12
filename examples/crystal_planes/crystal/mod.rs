@@ -9,6 +9,7 @@ pub mod ffs;
 mod rad_simdeez;
 use amethyst::core::{
     ecs::{Component, DenseVecStorage},
+    ecs::{ReadExpect, SystemData, World},
     math,
 };
 // mod rad_stdsimd;
@@ -27,17 +28,11 @@ use std::{
     path::Path,
 };
 
+mod buffer;
 pub type BlockMap = ndarray::Array3<bool>;
-
-// pub type Vec2i = math::Vector2<i32>;
-
-// pub type Vec3i = math::Vector3<i32>;
-// pub type Vec3 = math::Vector3<f32>;
-
-// pub type Point2i = math::Point2<i32>;
-// pub type Point3i = math::Point3<i32>;
-// pub type Point3 = math::Point3<f32>;
-// pub type Color = Vec3;
+pub use buffer::{aligned_vector_init, MutRadSlice, RadBuffer, RadSlice};
+use std::sync::Mutex;
+use std::time::Instant;
 
 const NUM_PLANE_CORNERS: usize = 4;
 
@@ -533,7 +528,7 @@ impl Drop for ProfTimer {
 pub struct RadFrontend {
     pub emit: Vec<Vec3>,
     pub diffuse: Vec<Vec3>,
-    pub output: rads::RadBuffer,
+    pub output: RadBuffer,
 }
 
 fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
@@ -573,6 +568,80 @@ impl RadFrontend {
                 // println!("light");
                 self.emit[i] +=
                     vec_mul(&diff_color, &color) * dot * (5f32 / (2f32 * 3.1415f32 * len * len));
+            }
+        }
+    }
+}
+
+pub struct Stat {
+    pints: usize,
+    last_stat: Option<std::time::Instant>,
+}
+
+pub struct Scene {
+    pub internal: Mutex<rads::RadBackend>,
+    pub frontend: Mutex<RadFrontend>,
+    pub stat: Mutex<Stat>,
+}
+
+impl Scene {
+    pub fn new(world: &World) -> Self {
+        let (planes, bitmap) = <(ReadExpect<PlanesSep>, ReadExpect<BlockMap>)>::fetch(world);
+
+        let filename = "extents.bin";
+
+        let extents = if let Some(extents) = ffs::load_extents(filename) {
+            extents
+        } else {
+            let formfactors = ffs::split_formfactors(ffs::setup_formfactors(&*planes, &*bitmap));
+            let extents = ffs::to_extents(&formfactors);
+            ffs::write_extents(filename, &extents);
+            println!("wrote {}", filename);
+            extents
+        };
+
+        let start = Instant::now();
+        let internal = rads::RadBackend::new(extents);
+
+        Scene {
+            internal: Mutex::new(internal),
+            frontend: Mutex::new(RadFrontend {
+                emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
+                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
+                output: RadBuffer::new(planes.num_planes()),
+            }),
+            stat: Mutex::new(Stat {
+                pints: 0,
+                last_stat: None,
+            }),
+        }
+    }
+    pub fn lock_frontend(&self) -> std::sync::MutexGuard<'_, RadFrontend> {
+        self.frontend.lock().expect("rad frontend lock failed")
+    }
+    pub fn do_rad(&self) {
+        let pint = {
+            let mut internal = self.internal.lock().expect("lock internal failed");
+            internal.do_rad(&self.frontend)
+        };
+
+        if let Ok(ref mut stat) = self.stat.lock() {
+            stat.pints += pint;
+            let mut new_time = false;
+            if let Some(time) = stat.last_stat {
+                let elapsed = time.elapsed();
+                if elapsed >= std::time::Duration::from_secs(1) {
+                    let ps = stat.pints as f64 / elapsed.as_secs_f64();
+                    println!("pint/s: {}", ps);
+                    new_time = true;
+                    stat.pints = 0;
+                }
+            } else {
+                new_time = true;
+            }
+
+            if new_time {
+                stat.last_stat = Some(std::time::Instant::now());
             }
         }
     }

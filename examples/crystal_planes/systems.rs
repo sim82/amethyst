@@ -1,6 +1,6 @@
 use crate::{
     crystal,
-    crystal::{rads::Scene, PlanesSep},
+    crystal::{PlanesSep, Scene},
     math::prelude::*,
     quad,
     quad::QuadInstance,
