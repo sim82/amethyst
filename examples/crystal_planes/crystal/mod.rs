@@ -4,6 +4,7 @@ pub mod ffs;
 
 // mod rad_expv;
 // mod rad_impv;
+mod rad_noop;
 mod rad_par;
 mod rad_ref;
 mod rad_simdeez;
@@ -14,6 +15,7 @@ pub mod rads {
     // pub use super::rad_stdsimd::*;
     // pub use super::rad_impv::*;
     // pub use super::rad_par::*;
+    // pub use super::rad_noop::*;
     pub use super::rad_simdeez::*;
 }
 pub mod util;
