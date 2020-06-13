@@ -1,4 +1,5 @@
 use super::{Bitmap, Point3i};
+use crate::math::prelude::*;
 
 pub fn occluded(p0: Point3i, p1: Point3i, solid: &dyn Bitmap) -> bool {
     // 3d bresenham, ripped from http://www.cobrabytes.com/index.php?topic=1150.0
@@ -88,4 +89,33 @@ pub fn occluded(p0: Point3i, p1: Point3i, solid: &dyn Bitmap) -> bool {
 
     // return false;
     false
+}
+
+pub struct ProfTimer {
+    name: String,
+    start: std::time::Instant,
+}
+
+impl ProfTimer {
+    pub fn new(name: &str) -> Self {
+        ProfTimer {
+            name: name.into(),
+            start: std::time::Instant::now(),
+        }
+    }
+}
+
+impl Drop for ProfTimer {
+    fn drop(&mut self) {
+        println!(
+            "pt: {} {:?} {:?}",
+            self.name,
+            std::thread::current().id(),
+            self.start.elapsed()
+        );
+    }
+}
+
+pub fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
+    Vec3::new(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z)
 }
