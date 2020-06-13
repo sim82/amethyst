@@ -1,7 +1,6 @@
 use crate::math::prelude::*;
 use amethyst::core::{
     ecs::{Component, DenseVecStorage},
-    ecs::{ReadExpect, SystemData, World},
     math,
 };
 use std::{

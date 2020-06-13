@@ -45,7 +45,7 @@ impl<'a> System<'a> for ApplyLightsSystem {
         ReadStorage<'a, PointLight>,
     );
 
-    fn run(&mut self, (mut rad_scene, planes, blockmap, point_lights): Self::SystemData) {
+    fn run(&mut self, (rad_scene, planes, blockmap, point_lights): Self::SystemData) {
         let mut frontend = rad_scene.lock_frontend();
         frontend.clear_emit();
         for light in point_lights.join() {
@@ -66,7 +66,7 @@ impl<'a> System<'a> for ApplyRendyLightsSystem {
         ReadStorage<'a, Transform>,
     );
 
-    fn run(&mut self, (mut rad_scene, planes, blockmap, light, transform): Self::SystemData) {
+    fn run(&mut self, (rad_scene, planes, blockmap, light, transform): Self::SystemData) {
         let mut frontend = rad_scene.lock_frontend();
         frontend.clear_emit();
         for (light, transform) in (&light, &transform).join() {

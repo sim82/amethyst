@@ -1,12 +1,7 @@
-use amethyst::core::{
-    ecs::{Component, DenseVecStorage},
-    ecs::{ReadExpect, SystemData, World},
-    math,
-};
+use amethyst::core::ecs::{ReadExpect, SystemData, World};
 
 use super::{ffs, rads, BlockMap, PlanesSep, RadBuffer, RadFrontend, Vec3};
 use std::sync::Mutex;
-use std::time::Instant;
 
 pub struct Stat {
     pints: usize,
@@ -35,7 +30,6 @@ impl Scene {
             extents
         };
 
-        let start = Instant::now();
         let internal = rads::RadBackend::new(extents);
 
         Scene {

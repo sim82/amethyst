@@ -97,6 +97,7 @@ pub struct ProfTimer {
 }
 
 impl ProfTimer {
+    #[allow(unused)]
     pub fn new(name: &str) -> Self {
         ProfTimer {
             name: name.into(),

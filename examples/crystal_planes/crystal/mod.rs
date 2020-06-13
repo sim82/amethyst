@@ -7,11 +7,7 @@ pub mod ffs;
 mod rad_par;
 mod rad_ref;
 mod rad_simdeez;
-use amethyst::core::{
-    ecs::{Component, DenseVecStorage},
-    ecs::{ReadExpect, SystemData, World},
-    math,
-};
+use amethyst::core::math;
 // mod rad_stdsimd;
 pub mod rads {
     // pub use super::rad_ref::*;
@@ -22,12 +18,7 @@ pub mod rads {
 }
 pub mod util;
 use crate::math::prelude::*;
-use std::{
-    fs::File,
-    io::{BufRead, BufReader},
-    iter::Iterator,
-    path::Path,
-};
+use std::iter::Iterator;
 
 mod buffer;
 mod map;
@@ -62,7 +53,7 @@ impl RadFrontend {
         // scale up light pos (each plane is only 0.25 * 0.25 in world space)
         let light_pos = Point3i::new(pos.x as i32, pos.y as i32, pos.z as i32) * 4;
         for (i, plane) in planes.planes_iter().enumerate() {
-            let trace_pos = (plane.cell + plane.dir.get_normal()); // s
+            let trace_pos = plane.cell + plane.dir.get_normal(); // s
 
             let d = (pos - Point3::new(trace_pos.x as f32, trace_pos.y as f32, trace_pos.z as f32))
                 .normalize();

@@ -3,16 +3,12 @@ use super::{
     aligned_vector_init, Bitmap, BlockMap, DisplayWrap, MutRadSlice, RadBuffer, RadFrontend,
     RadSlice,
 };
-use super::{ffs, ffs::Extent, util, PlanesSep};
+use super::{ffs, ffs::Extent};
 use crate::math::prelude::*;
-use amethyst::core::{
-    ecs::{ReadExpect, SystemData, World},
-    math,
-};
+
 use rayon::prelude::*;
 use simdeez::{avx2::Avx2, sse2::Sse2, Simd};
 use std::sync::Mutex;
-use std::time::Instant;
 
 pub struct Blocklist {
     single: Vec<(u32, f32)>,

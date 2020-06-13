@@ -14,7 +14,6 @@ use amethyst_derive::SystemDesc;
 use rand::Rng; //prelude::*;
 
 use std::sync::Arc;
-use std::time::Instant;
 
 #[derive(SystemDesc)]
 #[system_desc(name(RandomFlashingEmitSystemDesc))]
@@ -47,7 +46,7 @@ pub struct TronEmitSystem;
 impl<'a> System<'a> for TronEmitSystem {
     type SystemData = WriteExpect<'a, Arc<Scene>>;
 
-    fn run(&mut self, mut rad_scene: Self::SystemData) {
+    fn run(&mut self, rad_scene: Self::SystemData) {
         let mut rand = rand::thread_rng();
         use random_color::{Luminosity, RandomColor};
         let mut rc = RandomColor::new();
@@ -72,7 +71,7 @@ pub struct RunRadSceneSystem;
 impl<'a> System<'a> for RunRadSceneSystem {
     type SystemData = WriteExpect<'a, Arc<Scene>>;
 
-    fn run(&mut self, mut rad_scene: Self::SystemData) {
+    fn run(&mut self, mut _rad_scene: Self::SystemData) {
         // noop: rad runs in background
         // let _pt = crystal::ProfTimer::new("rad scene");
         // rad_scene.do_rad();
@@ -118,7 +117,7 @@ impl Default for ApplyDiffuseColorSystem {
 impl<'a> System<'a> for ApplyDiffuseColorSystem {
     type SystemData = (WriteExpect<'a, PlanesSep>, WriteExpect<'a, Arc<Scene>>);
 
-    fn run(&mut self, (mut planes, mut scene): Self::SystemData) {
+    fn run(&mut self, (planes, scene): Self::SystemData) {
         if self.up_to_date {
             return;
         }

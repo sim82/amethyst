@@ -13,11 +13,10 @@ mod vertex;
 use crate::quad_pass::RenderQuad;
 use amethyst::{
     animation::{
-        get_animation_set, Animation, AnimationBundle, AnimationCommand, AnimationControlSet,
-        AnimationSet, AnimationSetPrefab, DeferStartRelation, EndControl, InterpolationFunction,
-        Sampler, SamplerPrimitive, TransformChannel,
+        get_animation_set, AnimationBundle, AnimationCommand, AnimationSet, AnimationSetPrefab,
+        DeferStartRelation, EndControl,
     },
-    assets::{Loader, PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
+    assets::{PrefabLoader, PrefabLoaderSystemDesc, RonFormat},
     controls::{FlyControlBundle, HideCursor},
     core::{
         math::{Vector3, Vector4},
@@ -35,11 +34,7 @@ use amethyst::{
         types::DefaultBackend,
         RenderingBundle,
     },
-    utils::{
-        application_root_dir,
-        auto_fov::{AutoFov, AutoFovSystem},
-        scene::BasicScenePrefab,
-    },
+    utils::{application_root_dir, auto_fov::AutoFovSystem, scene::BasicScenePrefab},
     winit::{MouseButton, VirtualKeyCode},
     Error,
 };
@@ -122,7 +117,7 @@ impl SimpleState for MapLoadState {
         world.insert(rad_scene.clone());
 
         std::thread::spawn(move || {
-            while (true) {
+            loop {
                 // let _pt = crystal::ProfTimer::new("rad update");
                 rad_scene.do_rad();
             }

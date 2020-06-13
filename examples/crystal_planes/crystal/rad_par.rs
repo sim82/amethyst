@@ -1,18 +1,12 @@
-use super::{
-    aligned_vector_init, Bitmap, BlockMap, DisplayWrap, MutRadSlice, RadBuffer, RadFrontend,
-    RadSlice,
-};
-use super::{
-    ffs::{self, Extent},
-    util, PlanesSep,
-};
+use super::ffs::{self, Extent};
+use super::{MutRadSlice, RadBuffer, RadFrontend, RadSlice};
 #[allow(unused_imports)]
 use crate::math::prelude::*;
-use amethyst::core::math;
+
 use rayon::prelude::*;
 use std::sync::Mutex;
-use std::time::Instant;
 
+#[allow(unused)]
 pub struct RadBackend {
     pub emit: Vec<Vec3>,
     pub extents: Vec<Vec<ffs::Extent>>,
@@ -21,10 +15,7 @@ pub struct RadBackend {
     pub diffuse: Vec<Vec3>,
 }
 
-fn vec_mul(v1: &Vec3, v2: &Vec3) -> Vec3 {
-    Vec3::new(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z)
-}
-
+#[allow(unused)]
 impl RadBackend {
     pub fn new(extents: Vec<Vec<Extent>>) -> Self {
         let num_planes = extents.len();
