@@ -474,3 +474,8 @@ pub fn read_map<P: AsRef<Path>>(filename: P) -> std::io::Result<BlockMap> {
     bm.add(&slice);
     Ok(bm)
 }
+
+pub struct PlaneScene {
+    pub planes: PlanesSep,
+    pub blockmap: BlockMap,
+}

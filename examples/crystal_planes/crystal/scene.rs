@@ -1,7 +1,7 @@
 use amethyst::core::ecs::{ReadExpect, SystemData, World};
 
-use super::{ffs, rads, BlockMap, PlanesSep, RadBuffer, RadFrontend, Vec3};
-use std::sync::Mutex;
+use super::{ffs, rads, BlockMap, PlaneScene, RadBuffer, RadFrontend, Vec3};
+use std::sync::{Arc, Mutex};
 
 pub struct Stat {
     pints: usize,
@@ -16,14 +16,17 @@ pub struct Scene {
 
 impl Scene {
     pub fn new(world: &World) -> Self {
-        let (planes, bitmap) = <(ReadExpect<PlanesSep>, ReadExpect<BlockMap>)>::fetch(world);
+        let plane_scene = <(ReadExpect<Arc<PlaneScene>>)>::fetch(world);
 
         let filename = "extents.bin";
 
         let extents = if let Some(extents) = ffs::load_extents(filename) {
             extents
         } else {
-            let formfactors = ffs::split_formfactors(ffs::setup_formfactors(&*planes, &*bitmap));
+            let formfactors = ffs::split_formfactors(ffs::setup_formfactors(
+                &plane_scene.planes,
+                &plane_scene.blockmap,
+            ));
             let extents = ffs::to_extents(&formfactors);
             ffs::write_extents(filename, &extents);
             println!("wrote {}", filename);
@@ -35,9 +38,9 @@ impl Scene {
         Scene {
             internal: Mutex::new(internal),
             frontend: Mutex::new(RadFrontend {
-                emit: vec![Vec3::new(0.0, 0.0, 0.0); planes.num_planes()],
-                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); planes.num_planes()],
-                output: RadBuffer::new(planes.num_planes()),
+                emit: vec![Vec3::new(0.0, 0.0, 0.0); plane_scene.planes.num_planes()],
+                diffuse: vec![Vec3::new(1f32, 1f32, 1f32); plane_scene.planes.num_planes()],
+                output: RadBuffer::new(plane_scene.planes.num_planes()),
             }),
             stat: Mutex::new(Stat {
                 pints: 0,

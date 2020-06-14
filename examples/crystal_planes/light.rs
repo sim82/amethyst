@@ -1,5 +1,5 @@
 use crate::{
-    crystal::{BlockMap, PlanesSep, Scene},
+    crystal::{BlockMap, PlaneScene, Scene},
     math::prelude::*,
 };
 use amethyst::{
@@ -40,16 +40,20 @@ pub struct ApplyLightsSystem;
 impl<'a> System<'a> for ApplyLightsSystem {
     type SystemData = (
         WriteExpect<'a, Arc<Scene>>,
-        ReadExpect<'a, PlanesSep>,
-        ReadExpect<'a, BlockMap>,
+        ReadExpect<'a, Arc<PlaneScene>>,
         ReadStorage<'a, PointLight>,
     );
 
-    fn run(&mut self, (rad_scene, planes, blockmap, point_lights): Self::SystemData) {
+    fn run(&mut self, (rad_scene, plane_scene, point_lights): Self::SystemData) {
         let mut frontend = rad_scene.lock_frontend();
         frontend.clear_emit();
         for light in point_lights.join() {
-            frontend.apply_light(&planes, &blockmap, &light.pos, &light.color);
+            frontend.apply_light(
+                &plane_scene.planes,
+                &plane_scene.blockmap,
+                &light.pos,
+                &light.color,
+            );
         }
     }
 }
@@ -60,13 +64,12 @@ pub struct ApplyRendyLightsSystem;
 impl<'a> System<'a> for ApplyRendyLightsSystem {
     type SystemData = (
         WriteExpect<'a, Arc<Scene>>,
-        ReadExpect<'a, PlanesSep>,
-        ReadExpect<'a, BlockMap>,
+        ReadExpect<'a, Arc<PlaneScene>>,
         ReadStorage<'a, Light>,
         ReadStorage<'a, Transform>,
     );
 
-    fn run(&mut self, (rad_scene, planes, blockmap, light, transform): Self::SystemData) {
+    fn run(&mut self, (rad_scene, plane_scene, light, transform): Self::SystemData) {
         let mut frontend = rad_scene.lock_frontend();
         frontend.clear_emit();
         for (light, transform) in (&light, &transform).join() {
@@ -78,8 +81,8 @@ impl<'a> System<'a> for ApplyRendyLightsSystem {
                 let pos = Point3::from_homogeneous(pos).unwrap();
                 // println!("pos: {:?}", pos);
                 frontend.apply_light(
-                    &planes,
-                    &blockmap,
+                    &plane_scene.planes,
+                    &plane_scene.blockmap,
                     &pos,
                     &Color::new(
                         point_light.color.red,

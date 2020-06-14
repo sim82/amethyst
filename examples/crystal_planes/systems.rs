@@ -1,6 +1,6 @@
 use crate::{
     crystal,
-    crystal::{PlanesSep, Scene},
+    crystal::{PlaneScene, Scene},
     math::prelude::*,
     quad,
     quad::QuadInstance,
@@ -115,16 +115,19 @@ impl Default for ApplyDiffuseColorSystem {
     }
 }
 impl<'a> System<'a> for ApplyDiffuseColorSystem {
-    type SystemData = (WriteExpect<'a, PlanesSep>, WriteExpect<'a, Arc<Scene>>);
+    type SystemData = (
+        WriteExpect<'a, Arc<PlaneScene>>,
+        WriteExpect<'a, Arc<Scene>>,
+    );
 
-    fn run(&mut self, (planes, scene): Self::SystemData) {
+    fn run(&mut self, (plane_scene, scene): Self::SystemData) {
         if self.up_to_date {
             return;
         }
         let color1 = Vec3::new(1f32, 0.5f32, 0f32);
         // let color2 = hsv_to_rgb(rng.gen_range(0.0, 360.0), 1.0, 1.0);
         let color2 = Vec3::new(0f32, 1f32, 0f32);
-        for (i, plane) in planes.planes_iter().enumerate() {
+        for (i, plane) in plane_scene.planes.planes_iter().enumerate() {
             if ((plane.cell.y) / 2) % 2 == 1 {
                 continue;
             }

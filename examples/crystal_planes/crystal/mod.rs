@@ -27,7 +27,7 @@ mod map;
 mod scene;
 
 pub use buffer::{aligned_vector_init, MutRadSlice, RadBuffer, RadSlice};
-pub use map::{read_map, Bitmap, BlockMap, Dir, DisplayWrap, Plane, PlanesSep};
+pub use map::{read_map, Bitmap, BlockMap, Dir, DisplayWrap, Plane, PlaneScene, PlanesSep};
 pub use scene::{Scene, Stat};
 pub use util::ProfTimer;
 // simple profiling timer, e.g. to get an idea what is running when on which thread

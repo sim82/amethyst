@@ -34,6 +34,7 @@ impl RadBuffer {
     /// Utility for making specifically aligned vectors
 
     pub fn new(size: usize) -> RadBuffer {
+        // println!("RadBuf: size: {}", size * 3 * 4);
         RadBuffer {
             r: aligned_vector_init(size, 64, 0f32),
             g: aligned_vector_init(size, 64, 0f32),

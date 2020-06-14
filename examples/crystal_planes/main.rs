@@ -76,7 +76,6 @@ impl SimpleState for MapLoadState {
         let bm = crystal::read_map("hidden_ramp.txt").expect("could not read file");
         let mut planes = crystal::PlanesSep::new();
         planes.create_planes(&bm);
-        world.insert(bm);
         // let planes_copy: Vec<crystal::Plane> = planes.planes_iter().cloned().collect();
         world.register::<crystal::Plane>();
         world.register::<quad::QuadInstance>();
@@ -112,7 +111,11 @@ impl SimpleState for MapLoadState {
             };
             world.create_entity().with(p).with(quad).build();
         }
-        world.insert(planes);
+        world.insert(std::sync::Arc::new(crystal::PlaneScene {
+            planes: planes,
+            blockmap: bm,
+        }));
+
         let rad_scene = std::sync::Arc::new(crystal::Scene::new(world));
         world.insert(rad_scene.clone());
 
