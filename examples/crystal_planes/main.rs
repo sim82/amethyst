@@ -79,14 +79,14 @@ impl SimpleState for MapLoadState {
         // let planes_copy: Vec<crystal::Plane> = planes.planes_iter().cloned().collect();
         world.register::<crystal::Plane>();
         world.register::<quad::QuadInstance>();
-        world.register::<light::PointLight>();
+        world.register::<light::MyPointLight>();
         world.insert(Some(quad::ColorGeneration(0)));
         world.insert(LightMode::RandomFlashing);
 
         world
             .create_entity()
-            .named("the pointlight")
-            .with(light::PointLight::default())
+            .named("the MyPointLight")
+            .with(light::MyPointLight::default())
             .build();
 
         for (i, p) in planes.planes_iter().cloned().enumerate() {
@@ -111,10 +111,11 @@ impl SimpleState for MapLoadState {
             };
             world.create_entity().with(p).with(quad).build();
         }
-        world.insert(std::sync::Arc::new(crystal::PlaneScene {
+        let plane_scene = std::sync::Arc::new(crystal::PlaneScene {
             planes: planes,
             blockmap: bm,
-        }));
+        });
+        world.insert(plane_scene.clone());
 
         let rad_scene = std::sync::Arc::new(crystal::Scene::new(world));
         world.insert(rad_scene.clone());
@@ -125,6 +126,8 @@ impl SimpleState for MapLoadState {
                 rad_scene.do_rad();
             }
         });
+
+        world.insert(light::LightWorker::new(plane_scene));
         println!("load done");
         Trans::Replace(Box::new(ExampleState::default()))
     }
